@@ -1,0 +1,75 @@
+name: Release installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Frontend checks
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run check
+          npm run build
+
+      - name: Rust checks
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test sysinfo
+
+      - name: Build NSIS installer only
+        run: npx tauri build --bundles nsis
+
+      - name: Collect installer
+        shell: pwsh
+        run: |
+          $f = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe
+          if (-not $f) { throw "NSIS setup.exe not found" }
+          $f | Format-Table Name, Length
+          "SETUP_PATH=$($f[0].FullName)" >> $env:GITHUB_ENV
+          "SETUP_NAME=$($f[0].Name)" >> $env:GITHUB_ENV
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: termix-installer
+          path: ${{ env.SETUP_PATH }}
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.SETUP_PATH }}
+          generate_release_notes: true
