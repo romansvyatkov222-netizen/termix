@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-installer-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-installer:
     runs-on: windows-latest
@@ -48,6 +52,9 @@ jobs:
           cargo clippy --all-targets -- -D warnings
           cargo test sysinfo
 
+      # NSIS only: no bare exe is published. The frontend (dist/ built
+      # above via beforeBuildCommand) is embedded into the exe as Tauri
+      # resources, so the installed app runs with no sources present.
       - name: Build NSIS installer only
         run: npx tauri build --bundles nsis
 
