@@ -8,12 +8,14 @@
 //! `ssh` transport, `connect` connect commands, `sessions` session CRUD,
 //! `sftp` file commands, `transfers` transfer queue, `terminal` shell,
 //! `settings` settings/storage commands, `storage` encrypted files,
-//! `sysinfo` VDS stats over a short-lived exec channel.
+//! `sysinfo` VDS stats over a short-lived exec channel,
+//! `presence` Discord Rich Presence logo (best-effort background thread).
 
 mod connect;
 mod edit;
 mod errors;
 mod models;
+mod presence;
 mod sessions;
 mod settings;
 mod sftp;
@@ -28,6 +30,7 @@ mod transfers;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    presence::init();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
