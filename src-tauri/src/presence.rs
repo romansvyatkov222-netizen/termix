@@ -24,7 +24,7 @@ const HEARTBEAT: Duration = Duration::from_secs(30);
 /// How long to wait before reconnecting after a failure.
 const RETRY_DELAY: Duration = Duration::from_secs(15);
 
-fn build_activity(started_ms: i64) -> Activity<'static> {
+fn build_activity(started_sec: i64) -> Activity<'static> {
     Activity::new()
         .details("SSH-терминал и SFTP")
         .state("Работает в Termix")
@@ -33,7 +33,11 @@ fn build_activity(started_ms: i64) -> Activity<'static> {
                 .large_image(LARGE_IMAGE)
                 .large_text("Termix — SSH и SFTP"),
         )
-        .timestamps(Timestamps::new().start(started_ms))
+        // Discord IPC ждёт Unix-время в СЕКУНДАХ (time(nullptr)).
+        // Миллисекунды (timestamp_millis) Discord отбрасывает как дату
+        // за пределами диапазона и игнорирует весь SET_ACTIVITY —
+        // тогда остаётся автодетект exe со знаком `?`.
+        .timestamps(Timestamps::new().start(started_sec))
 }
 
 /// Spawns the presence thread. Call once at startup; returns immediately.
@@ -42,14 +46,14 @@ pub(crate) fn init() {
         if std::env::var_os("TERMIX_NO_DISCORD").is_some() {
             return;
         }
-        let started_ms = chrono::Utc::now().timestamp_millis();
+        let started_sec = chrono::Utc::now().timestamp();
         loop {
             let mut client = DiscordIpcClient::new(DISCORD_CLIENT_ID);
             if client.connect().is_ok() {
-                let _ = client.set_activity(build_activity(started_ms));
+                let _ = client.set_activity(build_activity(started_sec));
                 loop {
                     thread::sleep(HEARTBEAT);
-                    if client.set_activity(build_activity(started_ms)).is_err() {
+                    if client.set_activity(build_activity(started_sec)).is_err() {
                         break;
                     }
                 }
