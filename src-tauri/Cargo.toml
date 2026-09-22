@@ -29,6 +29,8 @@ windows = { version = "0.58", features = ["Win32_Security_Cryptography", "Win32_
 dirs = "5"
 base64 = "0.22"
 sha2 = "0.10"
+# Optional: Discord Rich Presence logo (reads \\?\pipe\discord-ipc-*).
+discord-rich-presence = "1"
 
 # Deliberate: dev builds skip debug symbols for faster Windows linking
 # (aws-lc-sys is heavy). Tradeoff: no line info in dev panics/backtraces.
