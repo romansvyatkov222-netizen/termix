@@ -18,6 +18,7 @@ pub(crate) async fn save_settings(
     settings: AppSettings,
 ) -> Result<(), String> {
     *state.settings.lock().await = settings.clone();
+    crate::presence::set_enabled(settings.discord_presence);
     let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     storage::write_plain("settings.json", &json)
 }

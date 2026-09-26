@@ -151,6 +151,7 @@ impl AppState {
         let settings: AppSettings = storage::read_plain("settings.json")
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
+        crate::presence::set_enabled(settings.discord_presence);
         Self {
             sessions: AsyncMutex::new(sessions),
             secrets: AsyncMutex::new(secrets),

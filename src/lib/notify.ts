@@ -4,8 +4,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 
-// Native OS toasts (Windows 10/11 Action Center, etc.) for finished transfers.
-// Permission is cached for the session; failures are silent by design.
+// Native OS toasts for finished transfers. Best-effort: failures are silent.
 let checked = false;
 let allowed = false;
 
@@ -22,9 +21,7 @@ async function ensureAllowed(): Promise<boolean> {
   return allowed;
 }
 
-// System sound NAMES (ms-winsoundevent), not file paths: the plugin chain
-// (notify_rust -> winrt Sound::from_str) only accepts Default/IM/Mail/
-// Reminder/SMS. Anything else fails parsing and the toast goes silent.
+// System sound names (ms-winsoundevent), not file paths.
 const SOUNDS = {
   done: "Default",
   error: "Reminder",
@@ -39,6 +36,5 @@ export async function notifyTransfer(
     if (!(await ensureAllowed())) return;
     sendNotification({ title, body, sound: SOUNDS[kind] });
   } catch {
-    /* notifications are best-effort */
   }
 }

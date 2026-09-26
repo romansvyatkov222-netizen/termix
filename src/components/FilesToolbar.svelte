@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { ArrowLeft, House, RotateCw, Search, Upload } from "lucide-svelte";
+  import { ArrowLeft, House, RotateCw, Search, Upload } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { tr, type Lang } from "../lib/i18n";
   import { displayPath, resolveInputPath } from "../lib/format";
+  import Tip from "./Tip.svelte";
 
-  // Extracted verbatim from FilesPanel (phase 3). Behaviour unchanged.
   let {
     lang,
     pathInput = $bindable("~/"),
@@ -29,7 +29,6 @@
     onRefresh: () => void;
   } = $props();
 
-  // Path autocomplete: typing `dir/` or `dir/par` suggests subfolders of `dir`.
   let suggestOpen = $state(false);
   let suggestItems = $state<string[]>([]);
   let suggestIdx = $state(0);
@@ -86,8 +85,6 @@
     }, 150);
   }
 
-  // Navigation from elsewhere (dblclick, home, …) rewrites the input:
-  // drop a stale dropdown, but not the one just opened by typing.
   let lastInput = pathInput;
   $effect(() => {
     if (pathInput !== lastInput) {
@@ -135,7 +132,6 @@
   }
 
   function onPathBlur() {
-    // Let a suggestion click (mousedown) land before closing.
     if (blurTimer) clearTimeout(blurTimer);
     blurTimer = setTimeout(() => {
       blurTimer = null;
@@ -150,14 +146,17 @@
 </script>
 
 <div class="toolbar">
-  <button
-    class="icon-btn"
-    title={homeDir ? `${tr(lang, "files.home")} (${homeDir})` : tr(lang, "files.home")}
-    onclick={onHome}
-  >
-    <House size={18} />
-  </button>
-  <button class="icon-btn" title={tr(lang, "files.back")} onclick={onUp}><ArrowLeft size={18} /></button>
+  <Tip tip={homeDir ? `${tr(lang, "files.home")} (${homeDir})` : tr(lang, "files.home")} pos="bottom">
+    <button
+      class="icon-btn"
+      onclick={onHome}
+    >
+      <House size={18} />
+    </button>
+  </Tip>
+  <Tip tip={tr(lang, "files.back")} pos="bottom">
+    <button class="icon-btn" onclick={onUp}><ArrowLeft size={18} /></button>
+  </Tip>
   <div class="path-wrap">
     <input
       class="path"
@@ -195,7 +194,9 @@
     <input class="search" placeholder={tr(lang, "files.search")} bind:value={search} autocomplete="off" />
   </div>
   <button class="btn btn-sm" onclick={onBrowseUpload}><Upload size={14} /> {tr(lang, "files.upload")}</button>
-  <button class="icon-btn" title={tr(lang, "files.refresh")} onclick={onRefresh}><RotateCw size={18} /></button>
+  <Tip tip={tr(lang, "files.refresh")} pos="bottom">
+    <button class="icon-btn" onclick={onRefresh}><RotateCw size={18} /></button>
+  </Tip>
 </div>
 
 <style>

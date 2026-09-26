@@ -35,7 +35,7 @@ export interface ConnectSecrets {
   passphrase?: string;
 }
 
-/** Full connect flow: host-key approval + error mapping. Returns true on success. */
+// Full connect flow: host-key approval + error mapping.
 export async function connectFlow(sessionId: string, secrets: ConnectSecrets = {}): Promise<boolean> {
   const r = await api.connect(sessionId, secrets);
   if (r.ok) return true;

@@ -5,14 +5,12 @@ export interface Session {
   port: number;
   username: string;
   authType: "password" | "privateKey";
-  /** Input-only: sent on create/update, never returned by the backend. */
+  // Secrets are input-only: sent on create/update, never returned by the backend.
   password?: string | null;
-  /** Input-only: sent on create/update, never returned by the backend. */
   keyPath?: string | null;
-  /** Input-only: sent on create/update, never returned by the backend. */
   keyPassphrase?: string | null;
   lastUsedAt?: string | null;
-  /** True when the backend holds stored secrets (quick-connect possible). */
+  // True when the backend holds stored secrets (quick-connect possible).
   hasStoredSecret?: boolean;
 }
 
@@ -24,6 +22,7 @@ export interface AppSettings {
   downloadDir?: string | null;
   scrollback: number;
   editor: EditorId;
+  discordPresence: boolean;
 }
 
 export interface RemoteEntry {

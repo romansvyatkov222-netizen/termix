@@ -12,6 +12,7 @@ use discord_rich_presence::{
     activity::{Activity, Assets, Timestamps},
     DiscordIpc, DiscordIpcClient,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -40,19 +41,35 @@ fn build_activity(started_sec: i64) -> Activity<'static> {
         .timestamps(Timestamps::new().start(started_sec))
 }
 
+static ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub(crate) fn set_enabled(v: bool) {
+    ENABLED.store(v, Ordering::SeqCst);
+}
+
+fn is_enabled() -> bool {
+    std::env::var_os("TERMIX_NO_DISCORD").is_none() && ENABLED.load(Ordering::SeqCst)
+}
+
 /// Spawns the presence thread. Call once at startup; returns immediately.
 pub(crate) fn init() {
     thread::spawn(|| {
-        if std::env::var_os("TERMIX_NO_DISCORD").is_some() {
-            return;
-        }
         let started_sec = chrono::Utc::now().timestamp();
         loop {
+            if !is_enabled() {
+                thread::sleep(RETRY_DELAY);
+                continue;
+            }
             let mut client = DiscordIpcClient::new(DISCORD_CLIENT_ID);
             if client.connect().is_ok() {
                 let _ = client.set_activity(build_activity(started_sec));
                 loop {
                     thread::sleep(HEARTBEAT);
+                    if !is_enabled() {
+                        let _ = client.clear_activity();
+                        let _ = client.close();
+                        break;
+                    }
                     if client.set_activity(build_activity(started_sec)).is_err() {
                         break;
                     }

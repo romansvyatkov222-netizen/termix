@@ -2,13 +2,13 @@ import { writable, derived, get } from "svelte/store";
 import { detectSystemLang, tr, type Lang } from "./i18n";
 import type { AppSettings, ConnStatus, Session, TransferItem } from "./types";
 
-// ---- language ----
 export const settings = writable<AppSettings>({
   language: "auto",
   terminalFontSize: 14,
   downloadDir: null,
   scrollback: 5000,
   editor: "notepad",
+  discordPresence: true,
 });
 
 export const lang = derived(settings, ($s): Lang => {
@@ -21,13 +21,10 @@ export function t(key: string, params?: Record<string, string | number>): string
   return tr(get(lang), key, params);
 }
 
-// ---- app state ----
 export const sessions = writable<Session[]>([]);
 export const conn = writable<ConnStatus>({ connected: false });
 export const view = writable<"start" | "workspace">("start");
 export const tab = writable<"files" | "terminal" | "stats">("files");
-// True once the server answered `stats_no_shell`: the stats tab hides
-// until the next (re)connect, when a shell may be available again.
 export const statsUnsupported = writable(false);
 export const transfers = writable<TransferItem[]>([]);
 

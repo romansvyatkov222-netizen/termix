@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MonitorSpeaker, Network, Plus, Settings, SquarePen, Trash } from "lucide-svelte";
+  import { MonitorSpeaker, Network, Plus, Settings, SquarePen, Trash } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { connectFlow } from "../lib/connect";
   import { conn, lang, sessions, toastErr, view } from "../lib/stores";
@@ -9,6 +9,7 @@
   import ConnectModal from "./ConnectModal.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import SettingsModal from "./SettingsModal.svelte";
+  import Tip from "./Tip.svelte";
 
   let showConnect = $state(false);
   let editing = $state<Session | null>(null);
@@ -30,8 +31,6 @@
 
   async function quickConnect(s: Session) {
     if (connectingId) return;
-    // Secrets are stored backend-side only; if none are stored yet,
-    // open the connect dialog instead of failing with auth_failed.
     if (!s.hasStoredSecret) {
       openEdit(s);
       return;
@@ -39,7 +38,6 @@
     connectingId = s.id;
     openMenuId = null;
     try {
-      // No secrets leave the frontend: the backend merges stored ones.
       const ok = await connectFlow(s.id, {});
       if (ok) {
         const [list, st] = await Promise.all([api.listSessions(), api.status()]);
@@ -81,10 +79,10 @@
 <svelte:window onclick={() => (openMenuId = null)} />
 
 <header class="topbar">
-  <div class="brand">
-    <img class="brand-logo" src="/termix-brand.svg" alt="Termix" />
-  </div>
-  <button class="icon-btn icon-lucide" title={tr($lang, "workspace.settings")} onclick={() => (showSettings = true)}><Settings size={18} /></button>
+  <span class="spacer"></span>
+  <Tip tip={tr($lang, "workspace.settings")} pos="bottom">
+    <button class="icon-btn icon-lucide" onclick={() => (showSettings = true)}><Settings size={18} /></button>
+  </Tip>
 </header>
 
 <main class="start">
@@ -173,17 +171,8 @@
     border-bottom: 1px solid var(--border-soft);
     background: var(--bg-panel);
   }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  /* Header logo: icon only (no text) — square box so the circular
-     mark renders 1:1 instead of stretched by the old wide viewBox. */
-  .brand img.brand-logo {
-    height: 36px;
-    width: 36px;
-    object-fit: contain;
+  .spacer {
+    flex: 1;
   }
   .start {
     flex: 1;

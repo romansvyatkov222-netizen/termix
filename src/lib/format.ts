@@ -15,7 +15,6 @@ export function fmtSpeed(bps: number): string {
   return `${fmtSize(bps)}/s`;
 }
 
-// Slavic plural pick: 1 -> one, 2-4 -> few, else many (en: 1 -> one).
 export function pluralKey(n: number, lang: string): "One" | "Few" | "Many" {
   if (lang !== "ru") return n === 1 ? "One" : "Few";
   const m10 = Math.abs(n) % 10;
@@ -25,8 +24,6 @@ export function pluralKey(n: number, lang: string): "One" | "Few" | "Many" {
   return "Many";
 }
 
-// Human uptime from seconds: "3d 4h", "5h 12m", "12m", "45s".
-// Days/hours collapse the tail (VDS uptimes are usually days long).
 export function fmtUptime(totalSecs: number | null | undefined, lang: string): string {
   if (totalSecs == null || totalSecs < 0) return "—";
   const d = Math.floor(totalSecs / 86400);
@@ -80,10 +77,7 @@ export function remoteJoin(dir: string, name: string): string {
   return `${dir.replace(/\/+$/, "")}/${name}`;
 }
 
-// Path bar uses "~" as an alias for the server root "/":
-// real "/" <-> display "~/", real "/etc" <-> display "~/etc".
-// `cwd` and all backend calls always use the real form; only the
-// toolbar input shows the display form.
+// Path bar uses "~" as an alias for the server root "/".
 export function displayPath(real: string): string {
   if (real === "/") return "~/";
   if (real.startsWith("/")) return `~${real}`;

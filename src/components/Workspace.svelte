@@ -2,7 +2,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { onDestroy, onMount } from "svelte";
   import { get } from "svelte/store";
-  import { CirclePower, FolderSearch, Monitor, Settings, Terminal } from "lucide-svelte";
+  import { CirclePower, FolderSearch, Monitor, Settings, Terminal } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { connectFlow } from "../lib/connect";
   import { conn, lang, statsUnsupported, tab, toastErr, view } from "../lib/stores";
@@ -12,10 +12,10 @@
   import TerminalPanel from "./TerminalPanel.svelte";
   import TransferQueue from "./TransferQueue.svelte";
   import SettingsModal from "./SettingsModal.svelte";
+  import Tip from "./Tip.svelte";
 
   let showSettings = $state(false);
-  // Unexpected transport loss (backend watchdog). Keeps the session id so
-  // we can reconnect with the stored secrets.
+  // Lost transport: keep the session id for reconnect with stored secrets.
   let lostConn = $state(false);
   let reconnecting = $state(false);
   let lastSessionId = $state<string | null>(null);
@@ -46,7 +46,6 @@
       if (cur.sessionId) lastSessionId = cur.sessionId;
       conn.set({ connected: false });
       statsUnsupported.set(false);
-      // One silent auto-attempt; on failure the banner stays for retry.
       if (lastSessionId && !reconnecting) {
         void tryReconnect();
       } else {
@@ -76,36 +75,35 @@
 </script>
 
 <header class="topbar">
-  <div class="brand">
-    <img class="brand-logo" src="/termix-brand.svg" alt="Termix" />
-  </div>
-  <div class="actions">
-    <button class="icon-btn icon-lucide" title={tr($lang, "workspace.disconnect")} onclick={disconnect}><CirclePower size={18} /></button>
-    <button class="icon-btn icon-lucide" title={tr($lang, "workspace.settings")} onclick={() => (showSettings = true)}><Settings size={18} /></button>
-  </div>
-</header>
-
-<div class="tabs">
   <div class="tab-group">
-    <button class="tab-btn" class:active={$tab === "files"} title={tr($lang, "workspace.files")} onclick={() => tab.set("files")}>
-      <FolderSearch size={16} />
-    </button>
-    <button class="tab-btn" class:active={$tab === "terminal"} title={tr($lang, "workspace.terminal")} onclick={() => tab.set("terminal")}>
-      <Terminal size={16} />
-    </button>
-    {#if !$statsUnsupported}
-      <button class="tab-btn" class:active={$tab === "stats"} title={tr($lang, "workspace.stats")} onclick={() => tab.set("stats")}>
-        <Monitor size={16} />
+    <Tip tip={tr($lang, "workspace.files")} pos="bottom">
+      <button class="tab-btn" class:active={$tab === "files"} onclick={() => tab.set("files")}>
+        <FolderSearch size={16} />
       </button>
+    </Tip>
+    <Tip tip={tr($lang, "workspace.terminal")} pos="bottom">
+      <button class="tab-btn" class:active={$tab === "terminal"} onclick={() => tab.set("terminal")}>
+        <Terminal size={16} />
+      </button>
+    </Tip>
+    {#if !$statsUnsupported}
+      <Tip tip={tr($lang, "workspace.stats")} pos="bottom">
+        <button class="tab-btn" class:active={$tab === "stats"} onclick={() => tab.set("stats")}>
+          <Monitor size={16} />
+        </button>
+      </Tip>
     {/if}
   </div>
-  {#if $conn.connected}
-    <span class="sess-wrap">
-      <span class="sess">{$conn.sessionName} · {$conn.host}</span>
-      <span class="dot"></span>
-    </span>
-  {/if}
-</div>
+  <span class="spacer"></span>
+  <div class="actions">
+    <Tip tip={tr($lang, "workspace.disconnect")} pos="bottom">
+      <button class="icon-btn icon-lucide" onclick={disconnect}><CirclePower size={18} /></button>
+    </Tip>
+    <Tip tip={tr($lang, "workspace.settings")} pos="bottom">
+      <button class="icon-btn icon-lucide" onclick={() => (showSettings = true)}><Settings size={18} /></button>
+    </Tip>
+  </div>
+</header>
 
 {#if lostConn || reconnecting}
   <div class="conn-banner">
@@ -135,53 +133,35 @@
   .topbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 12px;
     padding: 10px 20px;
     border-bottom: 1px solid var(--border-soft);
     background: var(--bg-panel);
+    min-width: 0;
   }
-  .brand {
+  .topbar .tab-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 4px;
+    flex-shrink: 0;
     min-width: 0;
   }
-  /* Header logo: icon only (no text) — square box so the circular
-     mark renders 1:1 instead of stretched by the old wide viewBox. */
-  .brand img.brand-logo {
-    display: block;
-    flex-shrink: 0;
-    height: 30px;
-    width: 30px;
-    object-fit: contain;
-  }
-  .sess-wrap {
+  .topbar .tab-btn {
     display: inline-flex;
     align-items: center;
-    align-self: center;
-    gap: 8px;
-    min-width: 0;
-    max-width: 100%;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-soft);
-    border-radius: 999px;
-    padding: 5px 12px;
-    line-height: 1;
+    justify-content: center;
+    padding: 8px 12px;
+    margin-bottom: 0;
+    border-bottom: none;
+    line-height: 0;
   }
-  .sess {
-    font-size: 12px;
-    line-height: 1;
-    color: var(--text-sub);
-    font-family: Consolas, monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .topbar :global(.tab-btn.active svg) {
+    transform: scale(1.15);
   }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--ok);
+  .topbar .spacer {
+    flex: 1;
+  }
+  .topbar .actions {
     flex-shrink: 0;
   }
   .actions {

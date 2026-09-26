@@ -75,6 +75,13 @@ pub struct AppSettings {
     /// External editor for View/Edit: "notepad" | "notepad++" | "vscode".
     #[serde(default = "default_editor")]
     pub editor: String,
+    /// Discord Rich Presence activity. Saved in settings.json, applied live.
+    #[serde(default = "default_true")]
+    pub discord_presence: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_editor() -> String {

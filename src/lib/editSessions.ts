@@ -1,15 +1,8 @@
 import { derived, get, writable } from "svelte/store";
 
-// Shared View/Edit session state: FilesPanel writes, SettingsModal reads
-// (clear-temp button blocking). Pure in-memory UI state, no backend calls.
-//
-// Lifecycle (owned by FilesPanel, see its View/Edit block):
-// - `dirty` = local copy differs from the last uploaded/baselined state.
-// - A session ends on: chip X, explicit discard, disconnect, temp-clear.
-//   A successful upload only clears `dirty` — the session stays open.
-// - The settings "clear temp" button is blocked while ANY session is dirty;
-//   after clearing, all clean tracks are dropped (see closeAllCleanEdits).
-
+// Shared View/Edit UI state: FilesPanel writes, SettingsModal reads.
+// `dirty` = local copy differs from the last uploaded state.
+// A session ends on: chip X, discard, disconnect, temp-clear.
 export interface EditTrackState {
   sessionId: string;
   remotePath: string;
@@ -28,7 +21,6 @@ const queue = writable<EditTrackState[]>([]);
 const confirm = writable<EditTrackState | null>(null);
 const remoteWarn = writable<EditTrackState | null>(null);
 
-/** Read-only snapshots for components that only observe (settings). */
 export const editTracks = { subscribe: tracks.subscribe };
 export const hasDirtyEdit = derived(tracks, ($t) => $t.some((e) => e.dirty));
 
@@ -99,7 +91,6 @@ export function getEditRemoteWarn(): EditTrackState | null {
   return get(remoteWarn);
 }
 
-/** Drop every clean track + its queued modals (used after temp-clear). */
 export function closeAllCleanEdits(): void {
   tracks.set([]);
   queue.set([]);

@@ -7,6 +7,7 @@
     title,
     body,
     highlight,
+    highlightList,
     confirmText,
     cancelText,
     confirmStyle,
@@ -16,6 +17,7 @@
     title: string;
     body: string;
     highlight?: string | null;
+    highlightList?: string[] | null;
     confirmText?: string;
     cancelText?: string;
     confirmStyle?: "danger" | "accent";
@@ -39,7 +41,13 @@
   >
     <h2>{title}</h2>
     <p class="body">{body}</p>
-    {#if highlight}
+    {#if highlightList?.length}
+      <ul class="highlight highlight-list">
+        {#each highlightList as item (item)}
+          <li>{item}</li>
+        {/each}
+      </ul>
+    {:else if highlight}
       <div class="highlight">{highlight}</div>
     {/if}
     <div class="modal-actions">
@@ -80,5 +88,13 @@
     max-height: 120px;
     overflow-y: auto;
     user-select: text;
+  }
+  .highlight-list {
+    margin-bottom: 0;
+    padding-left: 28px;
+    list-style: disc;
+  }
+  .highlight-list li::marker {
+    color: var(--danger);
   }
 </style>

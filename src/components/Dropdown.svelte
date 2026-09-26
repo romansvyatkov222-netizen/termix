@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, ChevronDown } from "lucide-svelte";
+  import { Check, ChevronDown } from "@lucide/svelte";
   import { scale } from "svelte/transition";
 
   export interface DropOption {
@@ -22,7 +22,6 @@
   let open = $state(false);
   let root: HTMLDivElement | null = $state(null);
 
-  // Never show an empty field: fall back to the first option.
   let current = $derived(options.find((o) => o.value === value) ?? options[0]);
 
   function toggle(e: MouseEvent) {
@@ -38,8 +37,6 @@
 
 <svelte:window
   onclickcapture={(e) => {
-    // capture phase: modal containers stopPropagation on bubble,
-    // so a bubble-phase listener would never fire inside modals.
     if (open && root && !root.contains(e.target as Node)) open = false;
   }}
   onkeydown={(e) => {

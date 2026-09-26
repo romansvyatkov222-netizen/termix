@@ -8,6 +8,7 @@
   import { tr } from "../lib/i18n";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Dropdown from "./Dropdown.svelte";
+  import Tip from "./Tip.svelte";
 
   let {
     onClose,
@@ -24,16 +25,20 @@
   onMount(async () => {
     try {
       storageDir = await api.storagePath();
-    } catch { /* ignore */ }
+    } catch {
+    }
     try {
       version = await api.version();
-    } catch { /* ignore */ }
+    } catch {
+    }
     try {
       hasHosts = await api.hasKnownHosts();
-    } catch { /* ignore */ }
+    } catch {
+    }
     try {
       editors = await api.editorsList();
-    } catch { /* keep Notepad-only fallback */ }
+    } catch {
+    }
     await refreshEditTemp();
   });
 
@@ -70,8 +75,7 @@
     settings.set(next);
   }
 
-  // View/Edit editor dropdown: only installed editors are offered;
-  // a stale saved value (uninstalled since) falls back to Notepad.
+  // Only installed editors are offered; a stale saved value falls back to Notepad.
   let editors = $state<{ id: string; name: string; available: boolean }[]>([]);
   let editorOptions = $derived.by(() => {
     const names: Record<string, string> = {
@@ -102,10 +106,19 @@
     settings.set(next);
   }
 
-  // View/Edit temp folder: active only when there is something to delete.
-  // Blocked while any session holds unsaved edits (same `edit.pending`
-  // wording as the dock chips). After clearing, clean chips are closed —
-  // by construction no dirty session can exist at that point.
+  async function setDiscordPresence(v: boolean) {
+    if (v === $settings.discordPresence) return;
+    const next = { ...$settings, discordPresence: v };
+    try {
+      await api.saveSettings(next);
+    } catch (e) {
+      toastErr(String(e));
+      return;
+    }
+    settings.set(next);
+  }
+
+  // Temp folder is blocked while any edit session holds unsaved changes.
   let editTempFiles = $state(0);
 
   async function refreshEditTemp() {
@@ -168,7 +181,6 @@
 
 <svelte:window
   onkeydown={(e) => {
-    // Don't close settings while its nested confirm is open.
     if (e.key === "Escape" && !confirmClear) onClose();
   }}
 />
@@ -252,38 +264,54 @@
           <div class="field">
             <label for="set-clear-edittemp">{tr($lang, "settings.editTemp")}</label>
             <div class="field-row">
-              <button id="set-clear-edittemp" class="btn" disabled={$hasDirtyEdit || editTempFiles === 0} onclick={clearEditTemp}>
-                {tr($lang, "settings.clearEditTemp")}
-              </button>
+              {#if $hasDirtyEdit || editTempFiles === 0}
+                <Tip tip={$hasDirtyEdit ? tr($lang, "edit.pending") : tr($lang, "settings.noEditTemp")}>
+                  <button id="set-clear-edittemp" class="btn" disabled onclick={clearEditTemp}>
+                    {tr($lang, "settings.clearEditTemp")}
+                  </button>
+                </Tip>
+              {:else}
+                <button id="set-clear-edittemp" class="btn" onclick={clearEditTemp}>
+                  {tr($lang, "settings.clearEditTemp")}
+                </button>
+              {/if}
               <button class="btn" onclick={openEditTemp}>
                 {tr($lang, "settings.openEditTemp")}
               </button>
             </div>
-            {#if $hasDirtyEdit}
-              <span class="hint">{tr($lang, "edit.pending")}</span>
-            {:else if editTempFiles === 0}
-              <span class="hint">{tr($lang, "settings.noEditTemp")}</span>
-            {/if}
           </div>
         {:else if section === "security"}
           <div class="field">
-            <button class="btn" disabled={!hasHosts} onclick={() => (confirmClear = "hosts")}>
-              {tr($lang, "settings.clearHosts")}
-            </button>
             {#if !hasHosts}
-              <span class="hint">{tr($lang, "settings.noHosts")}</span>
+              <Tip tip={tr($lang, "settings.noHosts")}>
+                <button class="btn" disabled onclick={() => (confirmClear = "hosts")}>
+                  {tr($lang, "settings.clearHosts")}
+                </button>
+              </Tip>
+            {:else}
+              <button class="btn" onclick={() => (confirmClear = "hosts")}>
+                {tr($lang, "settings.clearHosts")}
+              </button>
             {/if}
           </div>
           <div class="field">
-            <button
-              class="btn btn-danger"
-              disabled={$sessions.length === 0}
-              onclick={() => (confirmClear = "sessions")}
-            >
-              {tr($lang, "settings.clearSessions")}
-            </button>
             {#if $sessions.length === 0}
-              <span class="hint">{tr($lang, "settings.noSessions")}</span>
+              <Tip tip={tr($lang, "settings.noSessions")}>
+                <button
+                  class="btn btn-danger"
+                  disabled
+                  onclick={() => (confirmClear = "sessions")}
+                >
+                  {tr($lang, "settings.clearSessions")}
+                </button>
+              </Tip>
+            {:else}
+              <button
+                class="btn btn-danger"
+                onclick={() => (confirmClear = "sessions")}
+              >
+                {tr($lang, "settings.clearSessions")}
+              </button>
             {/if}
           </div>
           <div class="field">
@@ -294,6 +322,17 @@
           <div class="about">
             <div class="about-name">Termix <span class="ver">{tr($lang, "settings.version")} {version}</span></div>
             <p>{tr($lang, "settings.aboutText")}</p>
+            <button
+              class="toggle-row"
+              role="switch"
+              aria-checked={$settings.discordPresence}
+              onclick={() => setDiscordPresence(!$settings.discordPresence)}
+            >
+              <span class="toggle-label">{tr($lang, "settings.discordPresence")}</span>
+              <span class="toggle" class:on={$settings.discordPresence} aria-hidden="true">
+                <span class="toggle-knob"></span>
+              </span>
+            </button>
           </div>
         {/if}
       </div>
@@ -370,6 +409,51 @@
     color: var(--text-sub);
     font-size: 13px;
     line-height: 1.6;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 0 0 0;
+    border: none;
+    border-top: 1px solid var(--border-soft);
+    background: transparent;
+    cursor: pointer;
+  }
+  .toggle-label {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .toggle {
+    position: relative;
+    flex-shrink: 0;
+    width: 38px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-sub);
+    transition: left 0.15s, background 0.15s;
+  }
+  .toggle.on {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+  .toggle.on .toggle-knob {
+    left: 18px;
+    background: var(--accent);
   }
   .about .sub {
     color: var(--text-faint);

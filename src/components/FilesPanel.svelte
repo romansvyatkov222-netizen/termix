@@ -24,8 +24,7 @@
   import FilesToolbar from "./FilesToolbar.svelte";
   import FilesCtxMenu from "./FilesCtxMenu.svelte";
 
-  // Kept mounted across tab switches (hidden via CSS) so cwd, selection
-  // and scroll position survive trips to the terminal tab.
+  // Kept mounted across tab switches so cwd, selection and scroll survive.
   let { active = true }: { active?: boolean } = $props();
 
   let cwd = $state("/");
@@ -93,10 +92,6 @@
     pendingLarge = null;
   }
 
-  // NOTE: subscriptions are set up in ensureEditSubs (called from trackEdit
-  // paths via the store) — onMount only starts I/O listeners. Workspace
-  // keeps FilesPanel mounted across tab switches, so a single onMount is
-  // enough for the whole app lifetime.
   onMount(() => {
     goHome();
     ensureEditSubs();
@@ -105,8 +100,6 @@
       const paths = ev.payload?.paths ?? [];
       if (paths.length) uploadPaths(paths);
     });
-    // Backend drops all edit sessions on disconnect; mirror it locally so
-    // no stale chips or modals survive a transport loss.
     const unlistenLost = listen("termix://disconnected", () => {
       resetEditUi();
     });
@@ -177,7 +170,6 @@
     ctx = { x: e.clientX, y: e.clientY, target };
   }
 
-  // Context-menu actions (former inline onclick bodies, lifted verbatim).
   function ctxDownload() {
     const target = ctx?.target;
     if (!target) return;
@@ -229,33 +221,8 @@
     void downloadFolderAsArchive(target);
   }
 
-  // ---- View/Edit -------------------------------------------------------
-  // One lightweight session per remote file: download to %TEMP%, launch the
-  // chosen editor detached, then poll for local saves. Upload happens only
-  // through the confirm modal, never silently.
-  //
-  // Lifecycle model (no process tracking — VS Code / Notepad++ are
-  // single-instance launchers whose spawn PID dies immediately, so PID
-  // death must never drive cleanup):
-  // - Tracks live in the shared editSessions store (SettingsModal reads it
-  //   for the clear-temp button); the modal/queue mirrors below are local
-  //   view state subscribed from the same store module.
-  // - The dock lists EVERY tracked session (open file), not just dirty ones,
-  //   so there is always a visible handle (chip X) to close it and delete
-  //   the temp copy. `dirty` only changes the chip style/text.
-  // - `dirty` = local copy differs from the last uploaded/baselined state.
-  // - A session ends on: chip X, explicit discard, disconnect, temp-clear.
-  //   A successful upload only clears `dirty` — the session stays open for
-  //   further edits. Temp copy is deleted by `edit_discard` in all end paths.
-  // - Modals are queued: with a non-destructive poll, a suppressed modal
-  //   loses nothing — the next poll reports it again.
-  // - "Cancel" on a modal = postpone: baseline moves, so the modal returns
-  //   only after the NEXT save in the editor, or immediately when the user
-  //   clicks its dirty chip (reaskEdit).
-  //
-  // NOTE: editSessions is a module-level Svelte store shared with
-  // SettingsModal — do NOT reassign it wholesale here (that would break the
-  // shared reference). Mutate via the store helpers only.
+  // View/Edit: one session per remote file, tracked in a shared store.
+  // Upload happens only through the confirm modal, never silently.
   import { editTracks, editModalStores } from "../lib/editSessions";
   let editSessions = $state<EditTrackState[]>([]);
   let editPolling = false;
@@ -283,11 +250,6 @@
     void ensureEditPolling();
   }
 
-  // Explicit close via the dock chip X: drop locally first (modals follow),
-  // then delete the temp copy backend-side. Best-effort — the session may
-  // already be gone (disconnect path), which is not an error.
-  // A dirty session closes silently too: the "Overwrite?" modal was already
-  // the decision point, and re-asking on every X would nag.
   async function closeEdit(sessionId: string) {
     untrackEdit(sessionId);
     await api.editDiscard(sessionId).catch(() => {});
@@ -297,9 +259,6 @@
     if (editPolling) return;
     editPolling = true;
     try {
-      // The store is the source of truth; re-read each tick (tracks may be
-      // added/removed by other components, e.g. temp-clear in settings).
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         await new Promise((r) => setTimeout(r, 1000));
         if (!active) continue;
@@ -313,7 +272,6 @@
           try {
             poll = await api.editPoll(e.sessionId);
           } catch {
-            // Session gone backend-side (discard/disconnect/temp wiped).
             untrackEdit(e.sessionId);
             continue;
           }
@@ -339,8 +297,6 @@
     return p.split("/").filter(Boolean).pop() ?? p;
   }
 
-  // Large/binary gate holds a NOT-tracked pending open: the dock must not
-  // show a chip before the user actually decides to open the file.
   let pendingLarge = $state<{ sessionId: string; remotePath: string; name: string } | null>(null);
 
   async function openForEdit(remotePath: string) {
@@ -348,8 +304,6 @@
     try {
       opened = await api.editOpen(remotePath);
     } catch (e) {
-      // edit_incomplete: truncated download, no session created, nothing
-      // to launch — a plain toast, never an empty editor window.
       toastErr(String(e));
       return;
     }
@@ -396,10 +350,7 @@
     untrackEdit(pend.sessionId);
   }
 
-  // "Cancel" (common.cancel label) = postpone: close the modal, move the
-  // baseline, keep the session dirty. After postpone the modal returns only
-  // after the NEXT save in the editor — unless the user clicks the dirty
-  // chip, which re-asks immediately (reaskEdit).
+  // "Cancel" on a modal = postpone: ask again on the next save.
   function postponeEdit() {
     const cur = editConfirm;
     setEditConfirm(null);
@@ -407,9 +358,6 @@
     advanceEditQueue();
   }
 
-  // Clicking a dirty chip re-opens its upload modal immediately: the user
-  // explicitly asks "what about my edits?" instead of waiting for the next
-  // save. No-ops for clean sessions and for ones already queued/shown.
   function reaskEdit(sessionId: string) {
     const track = editSessions.find((e) => e.sessionId === sessionId);
     if (!track || !track.dirty) return;
@@ -417,9 +365,6 @@
   }
 
   async function finishEditSession(sessionId: string) {
-    // Upload succeeded: the session goes quiet and stays tracked, so the
-    // next save in the (possibly still open) editor raises a modal again.
-    // Full cleanup happens on chip X / discard / disconnect / temp-clear.
     setEditDirty(sessionId, false);
     advanceEditQueue();
   }
@@ -431,14 +376,11 @@
     try {
       res = await api.editUpload(cur.sessionId, false);
     } catch (e) {
-      // Session/temp already gone (disconnect, external wipe, close race):
-      // drop the modal + track instead of leaving a dead confirm open.
       if (String(e).includes("edit_not_found")) untrackEdit(cur.sessionId);
       else toastErr(String(e));
       return;
     }
     if (res.remoteChanged) {
-      // Someone else modified the server copy: ask once more (force path).
       setEditConfirm(null);
       setEditRemoteWarn(cur);
       return;
@@ -464,17 +406,12 @@
   }
 
   function postponeRemoteWarn() {
-    // Same postpone semantics: keep watching, ask again on the next poll.
     const cur = editRemoteWarn;
     setEditRemoteWarn(null);
     if (cur) void api.editBaseline(cur.sessionId).catch(() => {});
     advanceEditQueue();
   }
 
-  // Folder download: pack it into tar.gz on the server first, then pull
-  // the archive through the regular transfer queue (same pause/resume/
-  // cancel/retry/progress as files). The server temp archive is deleted
-  // automatically after done/cancelled.
   async function downloadFolderAsArchive(remoteDir: string) {
     const dir = await ensureDownloadDir();
     if (!dir) return;
@@ -488,7 +425,6 @@
         if (choice === "rename") local = withRename(local);
       }
     } catch {
-      /* ignore check errors */
     }
     let arch;
     try {
@@ -502,7 +438,6 @@
       transfers.update((l) => [...l.filter((t) => t.id !== item.id), { ...item, size: arch.size }]);
     } catch (e) {
       toastErr(String(e));
-      // Enqueue failed: don't orphan the server temp archive.
       await api.remove(arch.path).catch(() => {});
       return;
     }
@@ -548,7 +483,6 @@
           if (choice === "rename") local = withRename(local);
         }
       } catch {
-        /* ignore check errors */
       }
       try {
         const item = await api.enqueue("download", local, rp);
@@ -577,7 +511,6 @@
           if (choice === "rename") remote = withRename(remote);
         }
       } catch {
-        /* ignore */
       }
       try {
         const item = await api.enqueue("upload", lp, remote);
@@ -601,7 +534,6 @@
     try {
       transfers.set(await api.transfers());
     } catch {
-      /* ignore */
     }
   }
 
@@ -618,8 +550,6 @@
       } else if (prompt!.mode === "folder") {
         await api.mkdir(remoteJoin(cwd, raw));
       } else {
-        // Right-click opens the prompt without changing the old `selected`
-        // array, so the rename target is carried explicitly on the prompt.
         const from = prompt!.target ?? selected[0];
         if (!from) {
           promptError = tr($lang, "err.invalid_name");
@@ -649,7 +579,6 @@
     return entries.find((e) => e.path === selected[0]);
   }
 
-  // Names for the delete confirmation: "file.ext" / folder names.
   let deleteNames = $derived.by(() => {
     const names = selected.map((p) => {
       const hit = entries.find((e) => e.path === p);
@@ -657,8 +586,8 @@
       const base = p.split("/").pop() ?? p;
       return base || p;
     });
-    const shown = names.slice(0, 5).join(", ");
-    return names.length > 5 ? `${shown} … (+${names.length - 5})` : shown;
+    const shown = names.slice(0, 5);
+    return names.length > 5 ? [...shown, `… (+${names.length - 5})`] : shown;
   });
 </script>
 
@@ -761,6 +690,7 @@
         : tr($lang, "files.renameTitle")}
     initial={prompt.initial}
     okText={prompt.mode === "rename" ? tr($lang, "files.rename") : tr($lang, "files.create")}
+    label={prompt.mode === "rename" ? tr($lang, "files.renameLabel") : tr($lang, "files.namePrompt")}
     error={promptError}
     onOk={(v) => {
       if (prompt) prompt.initial = v;
@@ -774,7 +704,7 @@
   <ConfirmDialog
     title={tr($lang, "files.deleteTitle")}
     body={tr($lang, "files.deleteBody", { n: selected.length })}
-    highlight={deleteNames}
+    highlightList={deleteNames}
     confirmText={tr($lang, "files.delete")}
     onConfirm={doDelete}
     onCancel={() => (confirmDelete = false)}

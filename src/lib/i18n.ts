@@ -7,7 +7,6 @@ export const dicts: Record<Lang, Record<string, string>> = { ru, en };
 
 export function detectSystemLang(): Lang {
   try {
-    // `userLanguage` is a legacy IE-only field, hence the structural type.
     const legacy = (navigator as Navigator & { userLanguage?: unknown }).userLanguage;
     const nav = navigator.language || (typeof legacy === "string" ? legacy : "") || "en";
     return nav.toLowerCase().startsWith("ru") ? "ru" : "en";

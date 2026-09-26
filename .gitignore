@@ -19,3 +19,6 @@ Thumbs.db
 # Local IDE state (keep shared configs like .vscode/settings.json if any)
 .idea/
 *.code-workspace
+
+# Agent working notes (per-repo, not part of the project)
+AGENTS.md

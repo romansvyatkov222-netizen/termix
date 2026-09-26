@@ -1,12 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { Download, FileArchive, FilePlusCorner, FolderPlus, NotebookPen, Pencil, RotateCw, Trash, Upload } from "lucide-svelte";
+  import { Download, FileArchive, FilePlusCorner, FolderPlus, NotebookPen, Pencil, RotateCw, Trash, Upload } from "@lucide/svelte";
   import { tr, type Lang } from "../lib/i18n";
 
-  // Extracted verbatim from FilesPanel (phase 3). Behaviour unchanged.
-  // Item visibility is driven by hasTarget/canDownload computed in the parent;
-  // actions are parent callbacks (former inline onclick bodies).
-  // Styling (.ctx-menu/.ctx-item) lives in app.css (shared with StartPage).
   let {
     lang,
     x,
@@ -43,8 +39,6 @@
     onRefresh: () => void;
   } = $props();
 
-  // Keep the menu inside the viewport: if it would overflow bottom/right,
-  // flip it up/left. Measured after paint, hence tick().
   let menuEl: HTMLDivElement | null = $state(null);
   let pos = $state({ x: 0, y: 0 });
   $effect(() => {

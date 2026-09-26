@@ -7,6 +7,7 @@
     title,
     initial = "",
     okText,
+    label,
     error = null,
     onOk,
     onCancel,
@@ -14,6 +15,7 @@
     title: string;
     initial?: string;
     okText: string;
+    label: string;
     error?: string | null;
     onOk: (value: string) => void;
     onCancel: () => void;
@@ -50,7 +52,7 @@
       <div class="form-error">{error}</div>
     {/if}
     <div class="field">
-      <label for="prompt-input">{tr($lang, "files.namePrompt")}</label>
+      <label for="prompt-input">{label}</label>
       <input
         id="prompt-input"
         bind:this={inputEl}

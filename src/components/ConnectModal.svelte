@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Eye } from "lucide-svelte";
+  import { Eye } from "@lucide/svelte";
   import { fade, scale } from "svelte/transition";
   import { open } from "@tauri-apps/plugin-dialog";
   import { api } from "../lib/api";
@@ -8,6 +8,7 @@
   import { tr } from "../lib/i18n";
   import type { Session } from "../lib/types";
   import Dropdown from "./Dropdown.svelte";
+  import Tip from "./Tip.svelte";
 
   let {
     editing,
@@ -24,8 +25,7 @@
   let port = $state(editing?.port ?? 22);
   let username = $state(editing?.username ?? "");
   let authType = $state<"password" | "privateKey">(editing?.authType ?? "password");
-  // Secrets are never returned by the backend: fields start empty;
-  // empty input means "keep the stored secret".
+  // Secrets are input-only: empty input keeps the stored secret.
   let password = $state("");
   let keyPath = $state("");
   let passphrase = $state("");
@@ -45,18 +45,15 @@
       const sel = await open({ multiple: false, title: "key" });
       if (typeof sel === "string") keyPath = sel;
     } catch {
-      // fallback to backend dialog
       try {
         const p = await api.pickDir();
         void p;
       } catch {
-        /* ignore */
       }
     }
   }
 
   function collect(): Session {
-    // Cyrillic is stripped live in the input; belt & braces here.
     const cleanUser = username.replace(/[А-Яа-яЁё]/g, "");
     if (cleanUser !== username) username = cleanUser;
     const pw = password.trim();
@@ -68,7 +65,6 @@
       port: Number(port) || 22,
       username: username.trim(),
       authType,
-      // Only non-empty inputs are sent; empty = keep stored secret.
       password: authType === "password" ? (pw ? password : null) : null,
       keyPath: authType === "privateKey" ? (kp || null) : null,
       keyPassphrase: null,
@@ -99,9 +95,6 @@
     if (busy) return;
     busy = true;
     error = null;
-    // Sessions are persisted only after a successful connection.
-    // The record is created/updated first (the backend needs an id to
-    // connect), then rolled back if the connection fails.
     const isNew = !editing;
     const snapshot: Session | null = editing ? { ...editing } : null;
     try {
@@ -124,12 +117,9 @@
         sessions.set(list);
         onConnected();
       } else if (isNew) {
-        // New session that never connected: don't keep it in the list.
         await api.deleteSession(saved.id).catch(() => {});
         sessions.set(await api.listSessions().catch(() => []));
       } else if (snapshot) {
-        // Failed re-connect of an edited session: restore previous values.
-        // Empty secret inputs keep the stored secrets backend-side.
         const restored = await api.updateSession(snapshot).catch(() => null);
         if (restored) {
           sessions.update((l) => l.map((x) => (x.id === restored.id ? restored : x)));
@@ -162,7 +152,6 @@
 
 <svelte:window
   onkeydown={(e) => {
-    // Same rule as the Cancel button: no closing while connecting.
     if (e.key === "Escape" && !busy) onClose();
   }}
 />
@@ -200,7 +189,6 @@
         placeholder="root"
         autocomplete="off"
         oninput={() => {
-          // Cyrillic characters cannot be typed or pasted here at all.
           const clean = username.replace(/[А-Яа-яЁё]/g, "");
           if (clean !== username) username = clean;
         }}
@@ -228,14 +216,15 @@
             placeholder={editing?.hasStoredSecret ? "••••••••" : tr($lang, "connect.passwordPlaceholder")}
             autocomplete="new-password"
           />
-          <button
-            class="btn btn-sm eye-btn"
-            class:on={showPassword}
-            onclick={() => (showPassword = !showPassword)}
-            title={showPassword ? tr($lang, "connect.hidePassword") : tr($lang, "connect.showPassword")}
-          >
-            <Eye size={16} />
-          </button>
+          <Tip tip={showPassword ? tr($lang, "connect.hidePassword") : tr($lang, "connect.showPassword")}>
+            <button
+              class="btn btn-sm eye-btn"
+              class:on={showPassword}
+              onclick={() => (showPassword = !showPassword)}
+            >
+              <Eye size={16} />
+            </button>
+          </Tip>
         </div>
         {#if editing?.hasStoredSecret}
           <span class="hint">{tr($lang, "connect.savedHint")}</span>

@@ -17,6 +17,7 @@
         downloadDir: s.downloadDir ?? null,
         scrollback: s.scrollback || 5000,
         editor: (s.editor as "notepad" | "notepad++" | "vscode") ?? "notepad",
+        discordPresence: s.discordPresence ?? true,
       });
     } catch (e) {
       console.warn("settings load failed", e);
@@ -34,7 +35,6 @@
         view.set("workspace");
       }
     } catch {
-      /* ignore */
     }
     document.title = "Termix";
   });

@@ -1,13 +1,14 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { onDestroy, onMount } from "svelte";
-  import { Terminal } from "xterm";
-  import { FitAddon } from "xterm-addon-fit";
-  import { WebLinksAddon } from "xterm-addon-web-links";
-  import { ZoomIn, ZoomOut } from "lucide-svelte";
+  import { Terminal } from "@xterm/xterm";
+  import { FitAddon } from "@xterm/addon-fit";
+  import { WebLinksAddon } from "@xterm/addon-web-links";
+  import { ZoomIn, ZoomOut } from "@lucide/svelte";
   import { api, decodeB64, encodeB64 } from "../lib/api";
   import { lang, settings, toastErr } from "../lib/stores";
   import { tr } from "../lib/i18n";
+  import Tip from "./Tip.svelte";
 
   let {
     active,
@@ -29,7 +30,6 @@
 
   function safeFit(): { cols: number; rows: number } | null {
     if (!term || !fit || !container || !active) return null;
-    // Hidden tab => display:none => zero size, fit would propose 0x0.
     if (container.clientWidth <= 0 || container.clientHeight <= 0) return null;
     try {
       fit.fit();
@@ -56,7 +56,6 @@
     fontSize = $settings.terminalFontSize || 14;
     if (term) {
       term.options.fontSize = fontSize;
-      // Refit only when visible; otherwise xterm gets 0-size geometry.
       if (active) safeFit();
     }
   });
@@ -93,7 +92,6 @@
       });
     });
 
-    // right-click paste
     container.addEventListener("contextmenu", async (e) => {
       e.preventDefault();
       try {
@@ -103,7 +101,6 @@
           await api.termWrite(encodeB64(bytes));
         }
       } catch {
-        /* clipboard unavailable */
       }
     });
 
@@ -112,12 +109,9 @@
         const bytes = decodeB64(ev.payload.data);
         term?.write(bytes);
       } catch {
-        /* ignore */
       }
     });
     unlistenExit = await listen("termix://term-exit", () => {
-      // Real shell exit or dead transport (backend filters SFTP channel
-      // closes). Keep scrollback, offer reopen.
       term?.writeln("\r\n[session closed]");
       opened = false;
       wasDead = true;
@@ -138,19 +132,15 @@
       await api.termOpen(dims?.cols ?? 80, dims?.rows ?? 24);
       opened = true;
       if (wasDead) {
-        // fresh shell after real exit — start from clean screen
         term?.clear();
         wasDead = false;
       }
-      // Fit once more now that pty exists so remote gets real size.
       const dims2 = safeFit();
       if (dims2) {
         api.termResize(dims2.cols, dims2.rows).catch(() => {});
       }
       term?.focus();
     } catch (e) {
-      // No toast when there's simply no connection (e.g. mid-reconnect):
-      // the overlay + workspace banner already communicate the state.
       const msg = String(e);
       if (!msg.includes("not_connected")) toastErr(msg);
     } finally {
@@ -174,13 +164,11 @@
   }
 
   onMount(() => {
-    // Mount once, stay mounted (parent hides via CSS) => session survives
-    // tab switches. Init right away so the first activation can auto-open.
+    // Stay mounted across tab switches so the session survives.
     initTerm();
   });
 
-  // Auto-open the shell when the tab becomes visible; afterwards the
-  // session is kept alive while the user browses files.
+  // Auto-open the shell when the tab becomes visible.
   $effect(() => {
     if (active && container && !term) {
       initTerm().then(() => {
@@ -213,8 +201,12 @@
         {opening ? "…" : tr($lang, "terminal.open")}
       </button>
     {:else}
-      <button class="btn btn-sm" title={tr($lang, "terminal.fontDown")} onclick={() => font(-1)}><ZoomOut size={14} /></button>
-      <button class="btn btn-sm" title={tr($lang, "terminal.fontUp")} onclick={() => font(1)}><ZoomIn size={14} /></button>
+      <Tip tip={tr($lang, "terminal.fontDown")} pos="bottom">
+        <button class="btn btn-sm" onclick={() => font(-1)}><ZoomOut size={14} /></button>
+      </Tip>
+      <Tip tip={tr($lang, "terminal.fontUp")} pos="bottom">
+        <button class="btn btn-sm" onclick={() => font(1)}><ZoomIn size={14} /></button>
+      </Tip>
       <button class="btn btn-sm" onclick={clear}>{tr($lang, "terminal.clear")}</button>
     {/if}
   </div>

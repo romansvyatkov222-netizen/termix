@@ -16,13 +16,11 @@ import type {
 } from "./types";
 
 export const api = {
-  // sessions
   listSessions: () => invoke<Session[]>("list_sessions"),
   createSession: (s: Session) => invoke<Session>("create_session", { s }),
   updateSession: (s: Session) => invoke<Session>("update_session", { s }),
   deleteSession: (id: string) => invoke<void>("delete_session", { id }),
 
-  // ssh
   connect: (
     sessionId: string,
     opts: { password?: string; keyPath?: string; passphrase?: string; acceptHostKey?: boolean } = {},
@@ -40,7 +38,6 @@ export const api = {
   disconnect: () => invoke<void>("ssh_disconnect"),
   status: () => invoke<ConnStatus>("ssh_status"),
 
-  // sftp
   list: (path: string) => invoke<RemoteEntry[]>("sftp_list", { path }),
   home: () => invoke<string>("sftp_home"),
   mkdir: (path: string) => invoke<void>("sftp_mkdir", { path }),
@@ -49,7 +46,6 @@ export const api = {
   remove: (path: string) => invoke<void>("sftp_remove", { path }),
   exists: (path: string) => invoke<boolean>("sftp_exists", { path }),
 
-  // transfers
   enqueue: (
     direction: "upload" | "download",
     localPath: string,
@@ -66,7 +62,6 @@ export const api = {
     }),
   archiveCreate: (path: string) => invoke<ArchiveInfo>("archive_create", { path }),
 
-  // view/edit
   editorsList: () => invoke<EditorInfo[]>("editors_list"),
   editOpen: (remotePath: string) =>
     invoke<EditSessionInfo>("edit_open", { remotePath }),
@@ -85,7 +80,6 @@ export const api = {
   tClear: () => invoke<void>("transfer_clear_finished"),
   tRemove: (id: string) => invoke<void>("transfer_remove", { id }),
 
-  // terminal
   termOpen: (cols: number, rows: number) => invoke<void>("term_open", { cols, rows }),
   termWrite: (data: string) => invoke<void>("term_write", { data }),
   termResize: (cols: number, rows: number) => invoke<void>("term_resize", { cols, rows }),
@@ -95,10 +89,8 @@ export const api = {
   editTempOpen: () => invoke<string>("edit_temp_open"),
   editTempClear: () => invoke<{ removed: number }>("edit_temp_clear"),
 
-  // vds stats (short-lived exec channel, refresh on each tab visit)
   systemStats: () => invoke<SystemStats>("system_stats"),
 
-  // settings / misc
   getSettings: () => invoke<AppSettings>("get_settings"),
   saveSettings: (settings: AppSettings) => invoke<void>("save_settings", { settings }),
   pickDir: () => invoke<string | null>("pick_dir"),

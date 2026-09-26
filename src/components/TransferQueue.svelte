@@ -1,19 +1,18 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
-  import { Download, Pause, RefreshCw, Repeat, Upload, X } from "lucide-svelte";
+  import { Download, Pause, RefreshCw, Repeat, Upload, X } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { lang, toastErr, transfers } from "../lib/stores";
   import { notifyTransfer } from "../lib/notify";
   import { tr } from "../lib/i18n";
   import { fmtSize, fmtSpeed } from "../lib/format";
   import type { TransferItem } from "../lib/types";
+  import Tip from "./Tip.svelte";
 
   let collapsed = $state(false);
 
   // Native toast once per transfer when it reaches done/error.
-  // `lastStatus` guards against duplicate live emits; `notified` is reset
-  // when an item goes back to queued (retry) so it can notify again.
   const lastStatus = new Map<string, string>();
   const notified = new Set<string>();
 
@@ -37,7 +36,6 @@
     }
   }
 
-  // Drop tracking state for transfers that left the list (dismiss/clear).
   $effect(() => {
     const ids = new Set($transfers.map((t) => t.id));
     for (const id of [...lastStatus.keys()]) {
@@ -119,46 +117,62 @@
               <span class="q-dir" aria-hidden="true">
                 {#if t.direction === "upload"}<Upload size={13} />{:else}<Download size={13} />{/if}
               </span>
-              <span class="q-name-text" title={t.name}>{t.name}</span>
+              <Tip tip={t.name}>
+              <span class="q-name-text">{t.name}</span>
+            </Tip>
             </span>
             <span class="q-meta">{fmtSize(t.size)}{t.speed ? ` · ${fmtSpeed(t.speed)}` : ""}</span>
-            <span class="q-status st-{t.status}" title={t.status === "error" ? errText(t.error) : t.status === "done" ? "" : `${pct(t)}%`}>
-              {#if t.status === "done" || t.status === "error" || t.status === "cancelled"}
-                <span class="q-status-text">{tr($lang, `transfers.${t.status}`)}</span>
-              {:else}
-                <span class="q-ring" class:spin={t.status === "active" && !t.size} aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20">
-                    <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5" />
-                    <circle
-                      cx="10" cy="10" r="8" fill="none"
-                      stroke="rgba(230,235,242,0.8)" stroke-width="2.5" stroke-linecap="round"
-                      stroke-dasharray="50.27" stroke-dashoffset={50.27 * (1 - pct(t) / 100)}
-                      transform="rotate(-90 10 10)"
-                    />
-                  </svg>
-                </span>
-                <span class="q-status-text">{tr($lang, `transfers.${t.status}`)}</span>
-              {/if}
-            </span>
+            <Tip tip={t.status === "error" ? errText(t.error) : t.status === "done" ? "" : `${pct(t)}%`}>
+              <span class="q-status st-{t.status}">
+                {#if t.status === "done" || t.status === "error" || t.status === "cancelled"}
+                  <span class="q-status-text">{tr($lang, `transfers.${t.status}`)}</span>
+                {:else}
+                  <span class="q-ring" class:spin={t.status === "active" && !t.size} aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 20 20">
+                      <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5" />
+                      <circle
+                        cx="10" cy="10" r="8" fill="none"
+                        stroke="rgba(230,235,242,0.8)" stroke-width="2.5" stroke-linecap="round"
+                        stroke-dasharray="50.27" stroke-dashoffset={50.27 * (1 - pct(t) / 100)}
+                        transform="rotate(-90 10 10)"
+                      />
+                    </svg>
+                  </span>
+                  <span class="q-status-text">{tr($lang, `transfers.${t.status}`)}</span>
+                {/if}
+              </span>
+            </Tip>
             <span class="q-actions">
               {#if t.status === "active"}
-                <button class="btn btn-sm btn-icon" title={tr($lang, "transfers.pause")} onclick={() => act(() => api.tPause(t.id))}><Pause size={14} /></button>
+                <Tip tip={tr($lang, "transfers.pause")}>
+                  <button class="btn btn-sm btn-icon" onclick={() => act(() => api.tPause(t.id))}><Pause size={14} /></button>
+                </Tip>
               {/if}
               {#if t.status === "paused"}
-                <button class="btn btn-sm btn-icon" title={tr($lang, "transfers.resume")} onclick={() => act(() => api.tResume(t.id))}><RefreshCw size={14} /></button>
+                <Tip tip={tr($lang, "transfers.resume")}>
+                  <button class="btn btn-sm btn-icon" onclick={() => act(() => api.tResume(t.id))}><RefreshCw size={14} /></button>
+                </Tip>
               {/if}
               {#if t.status === "error"}
-                <button class="btn btn-sm btn-icon" title={tr($lang, "transfers.retry")} onclick={() => act(() => api.tRetry(t.id))}><Repeat size={14} /></button>
+                <Tip tip={tr($lang, "transfers.retry")}>
+                  <button class="btn btn-sm btn-icon" onclick={() => act(() => api.tRetry(t.id))}><Repeat size={14} /></button>
+                </Tip>
               {/if}
               {#if t.status === "queued" || t.status === "active" || t.status === "paused"}
-                <button class="btn btn-sm btn-icon" title={tr($lang, "transfers.cancel")} onclick={() => act(() => api.tCancel(t.id))}><X size={14} /></button>
+                <Tip tip={tr($lang, "transfers.cancel")}>
+                  <button class="btn btn-sm btn-icon" onclick={() => act(() => api.tCancel(t.id))}><X size={14} /></button>
+                </Tip>
               {/if}
               {#if t.status === "done" || t.status === "error" || t.status === "cancelled"}
-                <button class="btn btn-sm btn-ghost" title={tr($lang, "transfers.dismiss")} onclick={() => act(() => api.tRemove(t.id))}>✕</button>
+                <Tip tip={tr($lang, "transfers.dismiss")}>
+                  <button class="btn btn-sm btn-ghost" onclick={() => act(() => api.tRemove(t.id))}>✕</button>
+                </Tip>
               {/if}
             </span>
             {#if t.status === "error" && t.error}
-              <div class="q-err" title={errText(t.error)}>⚠ {errText(t.error)}</div>
+              <Tip tip={errText(t.error)}>
+                <div class="q-err">⚠ {errText(t.error)}</div>
+              </Tip>
             {/if}
           </div>
         {/each}
@@ -208,8 +222,6 @@
     font-size: 12px;
     padding: 4px 0 8px 0;
   }
-  /* One fixed template shared by the header and every row: no `auto`
-     columns, so columns can never drift between rows. */
   .q-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 170px 150px 190px;
@@ -227,7 +239,6 @@
     color: var(--text-faint);
     padding-bottom: 2px;
   }
-  /* Failed transfer: red tint without shifting the grid geometry. */
   .q-row.row-err {
     background: rgba(248, 113, 113, 0.07);
     box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.35);

@@ -3,24 +3,33 @@
   import * as echarts from "echarts/core";
   import { PieChart } from "echarts/charts";
   import { CanvasRenderer } from "echarts/renderers";
-  import { Cpu, HardDrive, MemoryStick, RefreshCw } from "lucide-svelte";
+  import { Cpu, HardDrive, MemoryStick, RefreshCw } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { fmtSize, fmtUptime, pluralKey } from "../lib/format";
   import { tr } from "../lib/i18n";
-  import { lang, statsUnsupported, tab, toastErr } from "../lib/stores";
+  import { conn, lang, statsUnsupported, tab, toast, toastErr } from "../lib/stores";
   import type { SystemStats } from "../lib/types";
+  import Tip from "./Tip.svelte";
 
   echarts.use([PieChart, CanvasRenderer]);
 
-  // Same lifecycle as FilesPanel/TerminalPanel: always mounted, hidden via
-  // CSS. A fresh `system_stats` exec runs on every activation (plus manual
-  // refresh), so numbers are never stale. Polluting the shell channel is
-  // impossible — backend uses a short-lived exec channel.
+  // Always mounted, hidden via CSS. Fresh `system_stats` exec on every activation.
   let { active = true }: { active?: boolean } = $props();
 
   let stats = $state<SystemStats | null>(null);
   let loading = $state(false);
   let loadingSeq = 0;
+
+  async function copyIp() {
+    const ip = $conn.host;
+    if (!ip) return;
+    try {
+      await navigator.clipboard.writeText(ip);
+      toast("ok", tr($lang, "stats.copied"));
+    } catch {
+      toastErr("clipboard_failed");
+    }
+  }
 
   let cpuEl: HTMLDivElement | null = $state(null);
   let memEl: HTMLDivElement | null = $state(null);
@@ -33,20 +42,12 @@
   const ACCENT = "#5eead4";
   const TRACK = "rgba(255,255,255,0.08)";
 
-  // Three visible states in app palette: <50% mint (plenty free),
-  // 50-85% amber (about half), >=85% red (almost full). Both the ring
-  // and the center icon share the color so the state reads instantly.
   function ringColor(pct: number): string {
     if (pct >= 85) return "#f87171";
     if (pct >= 50) return "#fbbf24";
     return ACCENT;
   }
 
-  // Ring only — no titles, no center text inside echarts. Center content
-  // (Lucide icon + % + sub) is an HTML overlay so icons stay crisp.
-  // Single notMerge setOption per render: echarts replays the initial
-  // grow animation (0 -> value) every time, which is exactly the fill
-  // effect we want on each tab visit / refresh.
   function ringOption(used: number, free: number) {
     const total = used + free;
     const pct = total > 0 ? (used / total) * 100 : 0;
@@ -72,18 +73,8 @@
     } as echarts.EChartsCoreOption;
   }
 
-  // Staged fill animation: instant zero baseline (final color) with
-  // notMerge, then a merged update to real values on the next frame.
-  // The merged update interpolates arc angles 0 -> value, which is the
-  // only animation path that reliably plays on every tab visit/refresh
-  // (a lone notMerge setOption gets its initial animation swallowed by
-  // the resize/init happening in the same tick under display:none).
   function setRing(chart: echarts.ECharts | null, used: number, free: number) {
     if (!chart) return;
-    // Replace the whole series each time: with notMerge the pie is treated
-    // as brand-new data, so echarts plays the initial grow animation from
-    // zero on every render. The old two-step (zero baseline + rAF update)
-    // collapsed into one synchronous render — arcs appeared instantly.
     chart.setOption(ringOption(used, free), true);
   }
 
@@ -103,9 +94,6 @@
 
   function renderCharts() {
     ensureCharts();
-    // Charts are created while the tab is hidden (display:none => 0px).
-    // Resize synchronously now that the tab is visible so the staged
-    // zero->value update below has real geometry to interpolate in.
     cpuChart?.resize();
     memChart?.resize();
     diskChart?.resize();
@@ -132,7 +120,6 @@
     }
   }
 
-  // Center subtitles (HTML overlay, reactive to lang via tr()).
   function cpuSub(): string {
     if (!stats) return "";
     const parts: string[] = [];
@@ -152,7 +139,6 @@
       if (my !== loadingSeq) return;
       const msg = String(e);
       if (msg.includes("stats_no_shell")) {
-        // SFTP-only account: no exec possible, hide the tab entirely.
         statsUnsupported.set(true);
         tab.set("files");
       }
@@ -162,11 +148,6 @@
     }
   }
 
-  // Every activation funnels through here: refresh data, flush the DOM
-  // (ring containers only exist once `stats` is set), then render.
-  // renderCharts is never called from a raw `stats`-tracking effect —
-  // that caused double renders that swallowed the arc animation.
-  // The manual refresh button uses this too, otherwise rings go stale.
   async function activate() {
     await refresh();
     if (!stats || !active) return;
@@ -188,8 +169,6 @@
     cpuChart = memChart = diskChart = null;
   });
 
-  // ---- Overlay percents (static, no tween) ----
-  // Final values, computed straight from `stats` — no animation state.
   let cpuShown = $derived(stats?.cpuPercent ?? null);
   let memShown = $derived(
     stats?.memTotal != null && stats?.memUsed != null && stats.memTotal > 0
@@ -220,9 +199,11 @@
 <div class="stats" class:hidden={!active}>
   <div class="stats-bar">
     <div class="spacer"></div>
-    <button class="btn btn-sm" title={tr($lang, "stats.refresh")} onclick={activate} disabled={loading}>
-      <RefreshCw size={14} />
-    </button>
+    <Tip tip={tr($lang, "stats.refresh")} pos="bottom">
+      <button class="btn btn-sm" onclick={activate} disabled={loading}>
+        <RefreshCw size={14} />
+      </button>
+    </Tip>
   </div>
 
   <div class="stats-body">
@@ -232,6 +213,9 @@
       <div class="state">{tr($lang, "stats.noData")}</div>
     {:else}
       <div class="info-card">
+        {#if $conn.connected}
+          <div class="info-row"><span class="info-key">{tr($lang, "stats.ip")}:</span><Tip tip={tr($lang, "stats.copyIp")}><button class="info-val ip-click" onclick={copyIp}>{$conn.host}</button></Tip></div>
+        {/if}
         {#if stats.osPretty}
           <div class="info-row"><span class="info-key">{tr($lang, "stats.os")}:</span><span class="info-val">{stats.osPretty}</span></div>
         {/if}
@@ -363,6 +347,16 @@
   }
   .info-val .sep {
     color: var(--text-faint);
+  }
+  .ip-click {
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+  .ip-click:hover {
+    color: var(--accent);
   }
   .rings {
     display: grid;
