@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: release-installer-${{ github.ref }}
@@ -58,14 +59,24 @@ jobs:
       - name: Build NSIS installer only
         run: npx tauri build --bundles nsis
 
+      # Tauri names the NSIS bundle as
+      # <productName>_<tauri.conf.json version>_<arch>-setup.exe.
+      # The bundle dir may hold stale files from cache, so resolve by
+      # exact versioned name instead of a wildcard.
       - name: Collect installer
         shell: pwsh
         run: |
-          $f = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe
-          if (-not $f) { throw "NSIS setup.exe not found" }
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $name = "Termix_${version}_x64-setup.exe"
+          $p = "src-tauri/target/release/bundle/nsis/$name"
+          if (-not (Test-Path -LiteralPath $p)) {
+            Get-ChildItem src-tauri/target/release/bundle/nsis/ | Format-Table Name, Length
+            throw "Expected NSIS bundle not found: $name"
+          }
+          $f = Get-Item -LiteralPath $p
           $f | Format-Table Name, Length
-          "SETUP_PATH=$($f[0].FullName)" >> $env:GITHUB_ENV
-          "SETUP_NAME=$($f[0].Name)" >> $env:GITHUB_ENV
+          "SETUP_PATH=$($f.FullName)" >> $env:GITHUB_ENV
+          "SETUP_NAME=$($f.Name)" >> $env:GITHUB_ENV
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
