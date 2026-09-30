@@ -80,11 +80,6 @@ export const api = {
   tClear: () => invoke<void>("transfer_clear_finished"),
   tRemove: (id: string) => invoke<void>("transfer_remove", { id }),
 
-  termOpen: (cols: number, rows: number) => invoke<void>("term_open", { cols, rows }),
-  termWrite: (data: string) => invoke<void>("term_write", { data }),
-  termResize: (cols: number, rows: number) => invoke<void>("term_resize", { cols, rows }),
-  termClose: () => invoke<void>("term_close"),
-
   editTempStatus: () => invoke<{ files: number }>("edit_temp_status"),
   editTempOpen: () => invoke<string>("edit_temp_open"),
   editTempClear: () => invoke<{ removed: number }>("edit_temp_clear"),
@@ -102,16 +97,3 @@ export const api = {
     invoke<{ exists: boolean; isDir: boolean; size: number }>("local_stat", { path }),
   version: () => invoke<string>("app_version"),
 };
-
-export function encodeB64(data: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < data.length; i++) s += String.fromCharCode(data[i]);
-  return btoa(s);
-}
-
-export function decodeB64(b64: string): Uint8Array {
-  const s = atob(b64);
-  const out = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
-  return out;
-}

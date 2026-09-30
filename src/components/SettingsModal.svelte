@@ -16,7 +16,7 @@
     onClose: () => void;
   } = $props();
 
-  let section = $state<"language" | "terminal" | "files" | "security" | "about">("language");
+  let section = $state<"language" | "files" | "security" | "about">("language");
     let confirmClear: "hosts" | "sessions" | null = $state(null);
   let storageDir = $state("");
   let version = $state("");
@@ -57,20 +57,6 @@
 
   async function setLang(v: "auto" | "ru" | "en") {
     const next = { ...$settings, language: v };
-    await api.saveSettings(next);
-    settings.set(next);
-  }
-
-  async function setFontSize(v: number) {
-    const n = Math.min(24, Math.max(9, Math.round(v) || 14));
-    const next = { ...$settings, terminalFontSize: n };
-    await api.saveSettings(next);
-    settings.set(next);
-  }
-
-  async function setScrollback(v: number) {
-    const n = Math.min(50000, Math.max(500, Math.round(v) || 5000));
-    const next = { ...$settings, scrollback: n };
     await api.saveSettings(next);
     settings.set(next);
   }
@@ -172,7 +158,6 @@
 
   const sections = [
     { id: "language", label: "settings.language" },
-    { id: "terminal", label: "settings.terminal" },
     { id: "files", label: "settings.files" },
     { id: "security", label: "settings.security" },
     { id: "about", label: "settings.about" },
@@ -217,32 +202,6 @@
               ]}
               value={["auto", "ru", "en"].includes($settings.language) ? $settings.language : "auto"}
               onChange={(v) => setLang(v as "auto" | "ru" | "en")}
-            />
-          </div>
-        {:else if section === "terminal"}
-          <div class="field">
-            <label for="set-font">{tr($lang, "settings.fontSize")}</label>
-            <input
-              id="set-font"
-              type="number"
-              min="9"
-              max="24"
-              value={$settings.terminalFontSize}
-              onchange={(e) => setFontSize(Number((e.target as HTMLInputElement).value))}
-              autocomplete="off"
-            />
-          </div>
-          <div class="field">
-            <label for="set-scroll">{tr($lang, "settings.scrollback")}</label>
-            <input
-              id="set-scroll"
-              type="number"
-              min="500"
-              max="50000"
-              step="500"
-              value={$settings.scrollback}
-              onchange={(e) => setScrollback(Number((e.target as HTMLInputElement).value))}
-              autocomplete="off"
             />
           </div>
         {:else if section === "files"}

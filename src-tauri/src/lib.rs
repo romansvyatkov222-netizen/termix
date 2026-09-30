@@ -1,4 +1,4 @@
-//! Termix backend — SSH/SFTP over **russh** (+ russh-sftp).
+//! Termix backend — SFTP file manager over **russh** (+ russh-sftp).
 //!
 //! Library choice (fixed for the project): `russh`, not `ssh2`.
 //! Single active SSH connection, encrypted local storage via DPAPI.
@@ -6,7 +6,7 @@
 //! Module layout (phase 1 refactor, moved 1:1 from a single lib.rs):
 //! `models` data types, `errors` error mapping, `state` shared state,
 //! `ssh` transport, `connect` connect commands, `sessions` session CRUD,
-//! `sftp` file commands, `transfers` transfer queue, `terminal` shell,
+//! `sftp` file commands, `transfers` transfer queue,
 //! `settings` settings/storage commands, `storage` encrypted files,
 //! `sysinfo` VDS stats over a short-lived exec channel,
 //! `presence` Discord Rich Presence logo (best-effort background thread).
@@ -23,7 +23,6 @@ mod ssh;
 mod state;
 mod storage;
 mod sysinfo;
-mod terminal;
 mod transfers;
 
 // ------------------------------------------------------------------- run ---
@@ -60,10 +59,6 @@ pub fn run() {
             transfers::transfer_retry,
             transfers::transfer_clear_finished,
             transfers::transfer_remove,
-            terminal::term_open,
-            terminal::term_write,
-            terminal::term_resize,
-            terminal::term_close,
             settings::get_settings,
             settings::save_settings,
             settings::pick_key_file,

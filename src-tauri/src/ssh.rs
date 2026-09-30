@@ -1,46 +1,19 @@
 //! SSH transport: handler, handshake, auth, watchdog (split from lib.rs, phase 1: 1:1).
 use crate::errors::{err_code, map_connect_error};
 use crate::models::Session;
-use crate::state::{clear_term_trackers, AppState, LiveConnection};
+use crate::state::{AppState, LiveConnection};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use russh::client::{self, Handle};
 use sha2::{Digest, Sha256};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 
 // ------------------------------------------------------------- ssh client ---
 
-/// Shared terminal-channel identity. SFTP/file operations open and close
-/// their own channels on the same SSH connection — those must never be
-/// mistaken for the shell channel.
-pub(crate) type TermId = Arc<std::sync::Mutex<Option<russh::ChannelId>>>;
-pub(crate) type TermAlive = Arc<AtomicBool>;
-
 pub(crate) struct TermixHandler {
-    pub(crate) app: Option<AppHandle>,
     pub(crate) key_slot: Arc<std::sync::Mutex<Option<String>>>,
-    pub(crate) term_id: TermId,
-    pub(crate) term_alive: TermAlive,
-}
-
-impl TermixHandler {
-    fn is_term_channel(&self, id: russh::ChannelId) -> bool {
-        self.term_id
-            .lock()
-            .ok()
-            .and_then(|g| *g)
-            .map(|term| term == id)
-            .unwrap_or(false)
-    }
-
-    fn mark_term_dead(&self) {
-        self.term_alive.store(false, Ordering::SeqCst);
-    }
 }
 
 pub(crate) fn fingerprint_of_openssh(openssh: &str) -> String {
@@ -64,75 +37,6 @@ impl client::Handler for TermixHandler {
         // Accept at transport level; the real trust decision happens in
         // ssh_connect by comparing against the encrypted known_hosts file.
         Ok(true)
-    }
-
-    async fn data(
-        &mut self,
-        channel: russh::ChannelId,
-        data: &[u8],
-        _session: &mut client::Session,
-    ) -> Result<(), Self::Error> {
-        // Ignore data from non-terminal channels (e.g. SFTP streams that
-        // didn't go through `into_stream` yet, exec channels, etc.).
-        if !self.is_term_channel(channel) {
-            return Ok(());
-        }
-        if let Some(app) = &self.app {
-            let _ = app.emit(
-                "termix://term-data",
-                serde_json::json!({ "data": B64.encode(data) }),
-            );
-        }
-        Ok(())
-    }
-
-    async fn extended_data(
-        &mut self,
-        channel: russh::ChannelId,
-        _ext: u32,
-        data: &[u8],
-        _session: &mut client::Session,
-    ) -> Result<(), Self::Error> {
-        if !self.is_term_channel(channel) {
-            return Ok(());
-        }
-        if let Some(app) = &self.app {
-            let _ = app.emit(
-                "termix://term-data",
-                serde_json::json!({ "data": B64.encode(data) }),
-            );
-        }
-        Ok(())
-    }
-
-    async fn channel_eof(
-        &mut self,
-        channel: russh::ChannelId,
-        _session: &mut client::Session,
-    ) -> Result<(), Self::Error> {
-        if !self.is_term_channel(channel) {
-            return Ok(());
-        }
-        self.mark_term_dead();
-        if let Some(app) = &self.app {
-            let _ = app.emit("termix://term-exit", serde_json::json!({}));
-        }
-        Ok(())
-    }
-
-    async fn channel_close(
-        &mut self,
-        channel: russh::ChannelId,
-        _session: &mut client::Session,
-    ) -> Result<(), Self::Error> {
-        if !self.is_term_channel(channel) {
-            return Ok(());
-        }
-        self.mark_term_dead();
-        if let Some(app) = &self.app {
-            let _ = app.emit("termix://term-exit", serde_json::json!({}));
-        }
-        Ok(())
     }
 }
 
@@ -168,23 +72,14 @@ pub(crate) fn spawn_watchdog(
                     Some(c) if Arc::ptr_eq(&c.handle, &handle) => {
                         // Still the active connection and it's dead: drop it.
                         // Its watchdog handle dies with it; this task returns.
-                        // Abort the drain-pump too: it owns the shell
-                        // read_half and must not outlive the transport.
-                        if let Some(pump) = c.term_pump.take() {
-                            pump.abort();
-                        }
-                        c.term_write.take();
                         guard.take();
                         true
                     }
                     _ => false,
                 }
             };
-            clear_term_trackers(&state);
             if stale {
-                // The shell is gone with the transport: reset the terminal
-                // UI the same way a normal shell exit does.
-                let _ = app.emit("termix://term-exit", serde_json::json!({}));
+                // No shell exists anymore: just tell the UI to reconnect.
                 let _ = app.emit("termix://disconnected", serde_json::json!({}));
             }
             return;
@@ -216,10 +111,7 @@ pub(crate) async fn do_handshake(
     let config = ssh_config();
     let slot = Arc::new(std::sync::Mutex::new(None::<String>));
     let handler = TermixHandler {
-        app: None,
         key_slot: slot.clone(),
-        term_id: Arc::new(std::sync::Mutex::new(None)),
-        term_alive: Arc::new(AtomicBool::new(false)),
     };
     let handle = client::connect(config, (host, port), handler)
         .await

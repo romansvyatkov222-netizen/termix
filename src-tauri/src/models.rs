@@ -66,12 +66,8 @@ impl SessionSecrets {
 pub struct AppSettings {
     #[serde(default = "default_lang")]
     pub language: String, // "auto" | "ru" | "en"
-    #[serde(default = "default_font_size")]
-    pub terminal_font_size: u32,
     #[serde(default)]
     pub download_dir: Option<String>,
-    #[serde(default = "default_scrollback")]
-    pub scrollback: u32,
     /// External editor for View/Edit: "notepad" | "notepad++" | "vscode".
     #[serde(default = "default_editor")]
     pub editor: String,
@@ -95,12 +91,6 @@ pub(crate) fn is_known_editor(id: &str) -> bool {
 
 fn default_lang() -> String {
     "auto".to_string()
-}
-fn default_font_size() -> u32 {
-    14
-}
-fn default_scrollback() -> u32 {
-    5000
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

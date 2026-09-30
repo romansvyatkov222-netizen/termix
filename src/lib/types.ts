@@ -18,9 +18,7 @@ export type EditorId = "notepad" | "notepad++" | "vscode";
 
 export interface AppSettings {
   language: "auto" | "ru" | "en";
-  terminalFontSize: number;
   downloadDir?: string | null;
-  scrollback: number;
   editor: EditorId;
   discordPresence: boolean;
 }

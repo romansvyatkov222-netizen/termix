@@ -4,9 +4,7 @@ import type { AppSettings, ConnStatus, Session, TransferItem } from "./types";
 
 export const settings = writable<AppSettings>({
   language: "auto",
-  terminalFontSize: 14,
   downloadDir: null,
-  scrollback: 5000,
   editor: "notepad",
   discordPresence: true,
 });
@@ -24,7 +22,7 @@ export function t(key: string, params?: Record<string, string | number>): string
 export const sessions = writable<Session[]>([]);
 export const conn = writable<ConnStatus>({ connected: false });
 export const view = writable<"start" | "workspace">("start");
-export const tab = writable<"files" | "terminal" | "stats">("files");
+export const tab = writable<"files" | "stats">("files");
 export const statsUnsupported = writable(false);
 export const transfers = writable<TransferItem[]>([]);
 

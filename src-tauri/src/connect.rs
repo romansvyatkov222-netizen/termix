@@ -7,10 +7,7 @@ use crate::ssh::{
     abort_watchdog, auth_handle, bye, bye_arc, do_handshake, fingerprint_of_openssh,
     spawn_watchdog, ssh_config, TermixHandler,
 };
-use crate::state::{
-    abort_term_pump, clear_term_trackers, persist_secrets, persist_sessions, AppState,
-    LiveConnection, PendingApproval,
-};
+use crate::state::{persist_secrets, persist_sessions, AppState, LiveConnection, PendingApproval};
 use crate::storage;
 use chrono::Utc;
 use russh::client;
@@ -106,15 +103,10 @@ pub(crate) async fn ssh_connect(
     match auth_handle(&mut handle, &session, &password, &key_path, &passphrase).await {
         Ok(true) => {
             bye(&handle);
-            // Reconnect with an app-bound handler so terminal output flows as events.
+            // Reconnect with a plain handler (no app events needed).
             let config = ssh_config();
             let slot = Arc::new(std::sync::Mutex::new(None::<String>));
-            let handler = TermixHandler {
-                app: Some(app.clone()),
-                key_slot: slot,
-                term_id: state.term_id.clone(),
-                term_alive: state.term_alive.clone(),
-            };
+            let handler = TermixHandler { key_slot: slot };
             let mut live = client::connect(config, (session.host.as_str(), session.port), handler)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -131,17 +123,10 @@ pub(crate) async fn ssh_connect(
                 });
             }
             {
-                // New SSH connection => any previous shell is gone.
-                // Its drain-pump owns the old read_half: abort it before
-                // dropping the connection, or its wait() lingers.
-                clear_term_trackers(&state);
                 let handle = Arc::new(AsyncMutex::new(live));
                 let watchdog = spawn_watchdog(app.clone(), handle.clone());
                 let mut guard = state.conn.lock().await;
                 if let Some(mut old) = guard.take() {
-                    if let Some(pump) = old.term_pump.take() {
-                        pump.abort();
-                    }
                     abort_watchdog(&mut old);
                     bye_arc(&old.handle).await;
                 }
@@ -150,10 +135,6 @@ pub(crate) async fn ssh_connect(
                     session_id: session.id.clone(),
                     session_name: session.name.clone(),
                     host: label,
-                    // Split shell channel: write_half for commands,
-                    // read_half moves into the drain-pump (see state.rs).
-                    term_write: None,
-                    term_pump: None,
                     watchdog: Some(watchdog),
                 });
             }
@@ -252,13 +233,9 @@ pub(crate) async fn ssh_reject_host_key(state: State<'_, AppState>) -> Result<()
 
 #[tauri::command]
 pub(crate) async fn ssh_disconnect(state: State<'_, AppState>) -> Result<(), String> {
-    clear_term_trackers(&state);
     // Stale view/edit sessions reference a dead transport; temp copies are
     // removed and the frontend drops its edit UI on the disconnect event.
     discard_all_edit_sessions(&state).await;
-    // Abort the drain-pump first: it owns the shell read_half and its
-    // wait() must not outlive the transport.
-    abort_term_pump(&state).await;
     let mut guard = state.conn.lock().await;
     if let Some(mut c) = guard.take() {
         abort_watchdog(&mut c);

@@ -1,8 +1,7 @@
 //! Remote host stats: CPU / RAM / disks / uptime of the connected VDS.
 //!
 //! One short-lived exec channel per call (same pattern as `ssh_home_via_exec`
-//! and `archive_create` in `sftp.rs`): the terminal pty channel and the SFTP
-//! subsystem are untouched. POSIX/Linux only — `/proc`, `df`, `free` —
+//! and `archive_create` in `sftp.rs`): the SFTP subsystem is untouched. POSIX/Linux only — `/proc`, `df`, `free` —
 //! anything else degrades field-by-field (`None`) instead of failing whole.
 
 use crate::errors::err_code;

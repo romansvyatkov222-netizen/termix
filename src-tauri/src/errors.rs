@@ -18,7 +18,6 @@ pub(crate) mod err_code {
     pub(crate) const NOT_FOUND: &str = "not_found";
     pub(crate) const NO_SERVER_KEY: &str = "no_server_key";
     pub(crate) const NOT_CONNECTED: &str = "not_connected";
-    pub(crate) const TERM_NOT_OPEN: &str = "term_not_open";
     pub(crate) const HOST_KEY_UNKNOWN: &str = "host_key_unknown";
     pub(crate) const HOST_KEY_CHANGED: &str = "host_key_changed";
     pub(crate) const TRANSFER_NOT_FINISHED: &str = "transfer_not_finished";

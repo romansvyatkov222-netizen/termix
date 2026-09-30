@@ -1,15 +1,12 @@
 //! Shared app state + persistence (split from lib.rs, phase 1: moved 1:1).
 use crate::edit::EditSessionEntry;
 use crate::models::{AppSettings, Session, SessionSecrets, TransferItem};
-use crate::ssh::{TermAlive, TermId, TermixHandler};
+use crate::ssh::TermixHandler;
 use crate::storage;
-use russh::client::{self, Handle};
+use russh::client::Handle;
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
 };
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -25,20 +22,6 @@ pub(crate) struct LiveConnection {
     pub(crate) session_id: String,
     pub(crate) session_name: String,
     pub(crate) host: String,
-    /// Write half of the shell channel, shared by commands.
-    /// The read half is owned by the drain-pump task (`term_pump`
-    /// below): russh delivers incoming `CHANNEL_DATA` into a bounded
-    /// mpsc (`channel_buffer_size`), so unless someone drains
-    /// `read_half` the SSH event loop blocks on `chan.send(..).await`
-    /// and the whole transport wedges — tabs, status, SFTP and
-    /// disconnect all hang. Splitting lets the pump read while
-    /// commands only write.
-    /// `ChannelWriteHalf` is `Send + Sync` (all methods take `&self`)
-    /// and serializes flow-control internally, so sharing it via
-    /// `Arc` needs no extra lock: concurrent write/resize/eof are
-    /// each one `send_msg` on the session channel.
-    pub(crate) term_write: Option<Arc<russh::ChannelWriteHalf<client::Msg>>>,
-    pub(crate) term_pump: Option<tokio::task::AbortHandle>,
     pub(crate) watchdog: Option<tokio::task::AbortHandle>,
 }
 
@@ -62,29 +45,6 @@ pub struct AppState {
     /// View/Edit sessions keyed by session id (remote path -> one session).
     pub(crate) edit_sessions: AsyncMutex<HashMap<String, EditSessionEntry>>,
     pub(crate) pump_running: AtomicBool,
-    pub(crate) term_id: TermId,
-    pub(crate) term_alive: TermAlive,
-}
-
-pub(crate) fn clear_term_trackers(state: &AppState) {
-    if let Ok(mut g) = state.term_id.lock() {
-        *g = None;
-    }
-    state.term_alive.store(false, Ordering::SeqCst);
-}
-
-/// Abort the terminal drain-pump (if any) and drop the shell write half.
-/// Called on term_close / disconnect / reconnect / watchdog death: the
-/// pump owns `read_half`, so without an abort its `wait()` would linger
-/// after the channel is gone.
-pub(crate) async fn abort_term_pump(state: &AppState) {
-    let mut guard = state.conn.lock().await;
-    if let Some(conn) = guard.as_mut() {
-        if let Some(pump) = conn.term_pump.take() {
-            pump.abort();
-        }
-        conn.term_write.take();
-    }
 }
 
 pub(crate) fn persist_sessions(all: &[Session]) -> Result<(), String> {
@@ -190,8 +150,6 @@ impl AppState {
             controls: std::sync::Mutex::new(HashMap::new()),
             edit_sessions: AsyncMutex::new(HashMap::new()),
             pump_running: AtomicBool::new(false),
-            term_id: Arc::new(std::sync::Mutex::new(None)),
-            term_alive: Arc::new(AtomicBool::new(false)),
         }
     }
 }

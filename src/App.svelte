@@ -13,9 +13,7 @@
       const s = await api.getSettings();
       settings.set({
         language: (s.language as "auto" | "ru" | "en") ?? "auto",
-        terminalFontSize: s.terminalFontSize || 14,
         downloadDir: s.downloadDir ?? null,
-        scrollback: s.scrollback || 5000,
         editor: (s.editor as "notepad" | "notepad++" | "vscode") ?? "notepad",
         discordPresence: s.discordPresence ?? true,
       });

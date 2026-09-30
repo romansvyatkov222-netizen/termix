@@ -27,12 +27,12 @@ const RETRY_DELAY: Duration = Duration::from_secs(15);
 
 fn build_activity(started_sec: i64) -> Activity<'static> {
     Activity::new()
-        .details("SSH-терминал и SFTP")
+        .details("SFTP-менеджер файлов")
         .state("Работает в Termix")
         .assets(
             Assets::new()
                 .large_image(LARGE_IMAGE)
-                .large_text("Termix — SSH и SFTP"),
+                .large_text("Termix — SFTP"),
         )
         // Discord IPC ждёт Unix-время в СЕКУНДАХ (time(nullptr)).
         // Миллисекунды (timestamp_millis) Discord отбрасывает как дату

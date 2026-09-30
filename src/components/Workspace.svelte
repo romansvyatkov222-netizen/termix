@@ -2,14 +2,13 @@
   import { listen } from "@tauri-apps/api/event";
   import { onDestroy, onMount } from "svelte";
   import { get } from "svelte/store";
-  import { CirclePower, FolderSearch, Monitor, Settings, Terminal } from "@lucide/svelte";
+  import { CirclePower, FolderSearch, Monitor, Settings } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { connectFlow } from "../lib/connect";
   import { conn, lang, statsUnsupported, tab, toastErr, view } from "../lib/stores";
   import { tr } from "../lib/i18n";
   import FilesPanel from "./FilesPanel.svelte";
   import StatsPanel from "./StatsPanel.svelte";
-  import TerminalPanel from "./TerminalPanel.svelte";
   import TransferQueue from "./TransferQueue.svelte";
   import SettingsModal from "./SettingsModal.svelte";
   import Tip from "./Tip.svelte";
@@ -60,7 +59,6 @@
 
   async function disconnect() {
     try {
-      await api.termClose().catch(() => {});
       await api.disconnect();
       lostConn = false;
       lastSessionId = null;
@@ -79,11 +77,6 @@
     <Tip tip={tr($lang, "workspace.files")} pos="bottom">
       <button class="tab-btn" class:active={$tab === "files"} onclick={() => tab.set("files")}>
         <FolderSearch size={16} />
-      </button>
-    </Tip>
-    <Tip tip={tr($lang, "workspace.terminal")} pos="bottom">
-      <button class="tab-btn" class:active={$tab === "terminal"} onclick={() => tab.set("terminal")}>
-        <Terminal size={16} />
       </button>
     </Tip>
     {#if !$statsUnsupported}
@@ -119,7 +112,6 @@
 
 <main class="work">
   <FilesPanel active={$tab === "files"} />
-  <TerminalPanel active={$tab === "terminal"} />
   <StatsPanel active={$tab === "stats"} />
 </main>
 
