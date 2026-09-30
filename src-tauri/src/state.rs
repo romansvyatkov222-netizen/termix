@@ -25,7 +25,11 @@ pub(crate) struct LiveConnection {
     pub(crate) session_id: String,
     pub(crate) session_name: String,
     pub(crate) host: String,
-    pub(crate) term_channel: Option<russh::Channel<client::Msg>>,
+    /// Shell channel behind its own mutex so slow terminal I/O never
+    /// blocks `conn` (tabs, status, disconnect, watchdog). The inner
+    /// `Channel` serializes flow-control access itself; this outer
+    /// mutex only serializes our concurrent commands (write/resize).
+    pub(crate) term_channel: Option<Arc<AsyncMutex<russh::Channel<client::Msg>>>>,
     pub(crate) watchdog: Option<tokio::task::AbortHandle>,
 }
 

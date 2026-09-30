@@ -102,6 +102,14 @@ select {
   cursor: default;
 }
 
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.ctx-item:focus-visible,
+.tab-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -215,8 +223,7 @@ select {
 .field input:-webkit-autofill,
 .field input:-webkit-autofill:hover,
 .field input:-webkit-autofill:focus,
-.path:-webkit-autofill,
-.search:-webkit-autofill {
+.field select:-webkit-autofill {
   -webkit-text-fill-color: var(--text);
   -webkit-box-shadow: 0 0 0 1000px var(--bg-base) inset;
   caret-color: var(--text);
@@ -332,7 +339,7 @@ select {
 
 .tab-btn.active {
   color: var(--accent);
-  border-bottom-color: transparent;
+  border-bottom-color: var(--accent);
 }
 
 .tab-btn.active svg {

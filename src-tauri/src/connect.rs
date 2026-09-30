@@ -145,6 +145,8 @@ pub(crate) async fn ssh_connect(
                     session_id: session.id.clone(),
                     session_name: session.name.clone(),
                     host: label,
+                    // Shell channel gets its own mutex: see state.rs —
+                    // a stalled term_write must not wedge disconnect.
                     term_channel: None,
                     watchdog: Some(watchdog),
                 });
