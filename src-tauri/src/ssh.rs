@@ -168,6 +168,12 @@ pub(crate) fn spawn_watchdog(
                     Some(c) if Arc::ptr_eq(&c.handle, &handle) => {
                         // Still the active connection and it's dead: drop it.
                         // Its watchdog handle dies with it; this task returns.
+                        // Abort the drain-pump too: it owns the shell
+                        // read_half and must not outlive the transport.
+                        if let Some(pump) = c.term_pump.take() {
+                            pump.abort();
+                        }
+                        c.term_write.take();
                         guard.take();
                         true
                     }

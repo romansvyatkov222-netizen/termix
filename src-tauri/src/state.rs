@@ -25,11 +25,20 @@ pub(crate) struct LiveConnection {
     pub(crate) session_id: String,
     pub(crate) session_name: String,
     pub(crate) host: String,
-    /// Shell channel behind its own mutex so slow terminal I/O never
-    /// blocks `conn` (tabs, status, disconnect, watchdog). The inner
-    /// `Channel` serializes flow-control access itself; this outer
-    /// mutex only serializes our concurrent commands (write/resize).
-    pub(crate) term_channel: Option<Arc<AsyncMutex<russh::Channel<client::Msg>>>>,
+    /// Write half of the shell channel, shared by commands.
+    /// The read half is owned by the drain-pump task (`term_pump`
+    /// below): russh delivers incoming `CHANNEL_DATA` into a bounded
+    /// mpsc (`channel_buffer_size`), so unless someone drains
+    /// `read_half` the SSH event loop blocks on `chan.send(..).await`
+    /// and the whole transport wedges — tabs, status, SFTP and
+    /// disconnect all hang. Splitting lets the pump read while
+    /// commands only write.
+    /// `ChannelWriteHalf` is `Send + Sync` (all methods take `&self`)
+    /// and serializes flow-control internally, so sharing it via
+    /// `Arc` needs no extra lock: concurrent write/resize/eof are
+    /// each one `send_msg` on the session channel.
+    pub(crate) term_write: Option<Arc<russh::ChannelWriteHalf<client::Msg>>>,
+    pub(crate) term_pump: Option<tokio::task::AbortHandle>,
     pub(crate) watchdog: Option<tokio::task::AbortHandle>,
 }
 
@@ -62,6 +71,20 @@ pub(crate) fn clear_term_trackers(state: &AppState) {
         *g = None;
     }
     state.term_alive.store(false, Ordering::SeqCst);
+}
+
+/// Abort the terminal drain-pump (if any) and drop the shell write half.
+/// Called on term_close / disconnect / reconnect / watchdog death: the
+/// pump owns `read_half`, so without an abort its `wait()` would linger
+/// after the channel is gone.
+pub(crate) async fn abort_term_pump(state: &AppState) {
+    let mut guard = state.conn.lock().await;
+    if let Some(conn) = guard.as_mut() {
+        if let Some(pump) = conn.term_pump.take() {
+            pump.abort();
+        }
+        conn.term_write.take();
+    }
 }
 
 pub(crate) fn persist_sessions(all: &[Session]) -> Result<(), String> {

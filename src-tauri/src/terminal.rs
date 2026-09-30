@@ -1,11 +1,11 @@
 //! Remote terminal commands (split from lib.rs, phase 1: moved 1:1).
 use crate::errors::err_code;
-use crate::state::{clear_term_trackers, AppState};
+use crate::state::{abort_term_pump, clear_term_trackers, AppState};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use russh::client;
+use russh::{client, ChannelMsg};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::Duration;
 
@@ -14,6 +14,15 @@ use tokio::time::Duration;
 fn term_is_alive(state: &State<'_, AppState>) -> bool {
     state.term_alive.load(Ordering::SeqCst)
 }
+
+/// Frontend event: one base64 chunk of shell output.
+const EV_TERM_DATA: &str = "termix://term-data";
+/// Frontend event: the shell is gone (exit / eof / close / transport loss).
+const EV_TERM_EXIT: &str = "termix://term-exit";
+
+/// Largest base64 payload per `term-data` event. xterm.js digests small
+/// appends incrementally; one huge emit would freeze the UI thread.
+const EMIT_CHUNK: usize = 32 * 1024;
 
 /// Cheap liveness probe for the event loop: a dead transport would wedge
 /// every later command behind a stuck `conn` lock.
@@ -42,7 +51,10 @@ async fn conn_is_responsive(
     .unwrap_or(false)
 }
 
-async fn write_channel_bytes(ch: &russh::Channel<client::Msg>, bytes: &[u8]) -> Result<(), String> {
+async fn write_channel_bytes(
+    ch: &russh::ChannelWriteHalf<client::Msg>,
+    bytes: &[u8],
+) -> Result<(), String> {
     use tokio::io::AsyncWriteExt;
     if bytes.is_empty() {
         return Ok(());
@@ -64,8 +76,62 @@ async fn write_channel_bytes(ch: &russh::Channel<client::Msg>, bytes: &[u8]) -> 
     Ok(())
 }
 
+/// Split raw shell output into base64 event payloads of at most
+/// `EMIT_CHUNK` bytes. Pure helper, unit-tested (temp test, removed).
+fn emit_chunks(data: &[u8]) -> Vec<String> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    data.chunks(EMIT_CHUNK).map(|c| B64.encode(c)).collect()
+}
+
+fn emit_data(app: &AppHandle, data: &[u8]) {
+    for payload in emit_chunks(data) {
+        let _ = app.emit(EV_TERM_DATA, serde_json::json!({ "data": payload }));
+    }
+}
+
+fn emit_exit(app: &AppHandle) {
+    let _ = app.emit(EV_TERM_EXIT, serde_json::json!({}));
+}
+
+/// Drain-pump: the ONLY reader of the shell channel. russh delivers
+/// incoming `CHANNEL_DATA` into a bounded mpsc (`channel_buffer_size`);
+/// if nobody drains `read_half`, the SSH event loop blocks on
+/// `chan.send(...).await` and the whole transport wedges — tabs,
+/// status, SFTP and disconnect all hang. This loop runs until the
+/// shell ends or the task is aborted (close / disconnect / reconnect).
+/// Takes `AppHandle` (Clone + 'static) instead of `State` so the
+/// spawned task owns everything it needs.
+async fn term_pump_loop(app: AppHandle, mut read: russh::ChannelReadHalf) {
+    // Shell-end latch: ExitStatus/Signal arrive BEFORE Eof/Close, so
+    // remember them and keep draining until the terminal Eof/Close/None.
+    loop {
+        match read.wait().await {
+            Some(ChannelMsg::Data { data }) => {
+                emit_data(&app, &data);
+            }
+            Some(ChannelMsg::ExtendedData { data, .. }) => {
+                emit_data(&app, &data);
+            }
+            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+            // ExitStatus/Signal precede Eof/Close: keep draining, don't exit.
+            Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::ExitSignal { .. }) => continue,
+            // WindowAdjusted / Success / Failure / Open...: flow-control
+            // bookkeeping is already done inside russh; nothing to show.
+            // XonXoff only matters for interactive flow display.
+            Some(_) => continue,
+        }
+    }
+    // Whoever got here first wins: mark dead + tell the UI.
+    let state: State<'_, AppState> = app.state();
+    clear_term_trackers(&state);
+    emit_exit(&app);
+}
+
 #[tauri::command]
 pub(crate) async fn term_open(
+    app: AppHandle,
     state: State<'_, AppState>,
     cols: u32,
     rows: u32,
@@ -77,7 +143,7 @@ pub(crate) async fn term_open(
         let conn = guard
             .as_ref()
             .ok_or_else(|| err_code::NOT_CONNECTED.to_string())?;
-        if conn.term_channel.is_some() && term_is_alive(&state) {
+        if conn.term_write.is_some() && term_is_alive(&state) {
             return Ok(());
         }
     }
@@ -85,13 +151,8 @@ pub(crate) async fn term_open(
         // tracker says alive but channel slot is gone (e.g. after
         // disconnect/reconnect race) — fall through to open fresh.
     } else {
-        // drop dead channel if any
-        let mut guard = state.conn.lock().await;
-        if let Some(conn) = guard.as_mut() {
-            if conn.term_channel.is_some() {
-                conn.term_channel.take();
-            }
-        }
+        // drop dead shell: abort a lingering pump + forget the write half.
+        abort_term_pump(&state).await;
         if let Ok(mut g) = state.term_id.lock() {
             *g = None;
         }
@@ -115,10 +176,26 @@ pub(crate) async fn term_open(
         ch
     };
     let id = channel.id();
+    // Split once: read_half moves into the pump forever, write_half
+    // stays for commands. After this point nobody ever locks a whole
+    // `Channel` — reads and writes proceed independently.
+    // `ChannelWriteHalf` is shared via `Arc` (all its methods take
+    // `&self`, flow-control is internal): no extra lock needed.
+    let (read_half, write_half) = channel.split();
+    let write_half = Arc::new(write_half);
+    let pump = tokio::spawn(term_pump_loop(app.clone(), read_half));
     {
         let mut guard = state.conn.lock().await;
         if let Some(conn) = guard.as_mut() {
-            conn.term_channel = Some(Arc::new(AsyncMutex::new(channel)));
+            if let Some(old) = conn.term_pump.replace(pump.abort_handle()) {
+                old.abort();
+            }
+            conn.term_write = Some(write_half);
+        } else {
+            // Disconnected between channel open and registration:
+            // kill the orphan pump, close the shell, report offline.
+            pump.abort();
+            return Err(err_code::NOT_CONNECTED.to_string());
         }
     }
     if let Ok(mut g) = state.term_id.lock() {
@@ -130,15 +207,17 @@ pub(crate) async fn term_open(
 
 #[tauri::command]
 pub(crate) async fn term_write(state: State<'_, AppState>, data: String) -> Result<(), String> {
-    // Clone the channel Arc under a short lock so a long / stalled write
-    // never blocks tabs, status, watchdog or disconnect.
+    // Clone the write-half Arc under a short lock so a long / stalled
+    // write never blocks tabs, status, watchdog or disconnect.
+    // `ChannelWriteHalf` methods take `&self` (flow-control internal),
+    // so no per-command lock is needed at all.
     let (term, handle) = {
         let guard = state.conn.lock().await;
         let conn = guard
             .as_ref()
             .ok_or_else(|| err_code::NOT_CONNECTED.to_string())?;
         let ch = conn
-            .term_channel
+            .term_write
             .clone()
             .ok_or_else(|| err_code::TERM_NOT_OPEN.to_string())?;
         (ch, conn.handle.clone())
@@ -156,18 +235,15 @@ pub(crate) async fn term_write(state: State<'_, AppState>, data: String) -> Resu
     // Slow path (bulk paste): never wedge the command behind a stuck
     // window — time out loudly and check the transport so the UI can
     // offer a reconnect instead of hanging forever.
-    let term_locked = term.lock().await;
     if bytes.len() <= 4096 {
         tokio::time::timeout(Duration::from_secs(15), async {
-            write_channel_bytes(&term_locked, &bytes).await
+            write_channel_bytes(&term, &bytes).await
         })
         .await
         .map_err(|_| err_code::TIMEOUT.to_string())??;
         return Ok(());
     }
-    let r = write_channel_bytes(&term_locked, &bytes).await;
-    drop(term_locked);
-    match r {
+    match write_channel_bytes(&term, &bytes).await {
         Ok(()) => Ok(()),
         Err(e) if e == "term_window_stalled" => {
             if !conn_is_responsive(&handle, &state).await {
@@ -193,33 +269,34 @@ pub(crate) async fn term_resize(
         let conn = guard
             .as_ref()
             .ok_or_else(|| err_code::NOT_CONNECTED.to_string())?;
-        conn.term_channel.clone()
-    };
-    if let Some(ch) = term {
-        if !term_is_alive(&state) {
-            return Ok(());
+        match (conn.term_write.clone(), term_is_alive(&state)) {
+            (Some(ch), true) => ch,
+            _ => return Ok(()),
         }
-        let ch = ch.lock().await;
-        tokio::time::timeout(Duration::from_secs(5), ch.window_change(cols, rows, 0, 0))
-            .await
-            .map_err(|_| err_code::TIMEOUT.to_string())?
-            .map_err(|e| e.to_string())?;
-    }
+    };
+    tokio::time::timeout(Duration::from_secs(5), term.window_change(cols, rows, 0, 0))
+        .await
+        .map_err(|_| err_code::TIMEOUT.to_string())?
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) async fn term_close(state: State<'_, AppState>) -> Result<(), String> {
     clear_term_trackers(&state);
-    // Take the channel out fast so tabs/disconnect never wait on it;
+    // Take the write half + pump out fast so tabs/disconnect never wait;
     // the EOF handshake below runs without holding `conn`.
     let term = {
         let mut guard = state.conn.lock().await;
-        guard.as_mut().and_then(|conn| conn.term_channel.take())
+        guard.as_mut().and_then(|conn| {
+            if let Some(pump) = conn.term_pump.take() {
+                pump.abort();
+            }
+            conn.term_write.take()
+        })
     };
-    if let Some(ch) = term {
-        let ch = ch.lock().await;
-        let _ = tokio::time::timeout(Duration::from_secs(3), ch.eof()).await;
+    if let Some(term) = term {
+        let _ = tokio::time::timeout(Duration::from_secs(3), term.eof()).await;
     }
     Ok(())
 }

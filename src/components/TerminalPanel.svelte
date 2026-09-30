@@ -22,6 +22,15 @@
   let opened = $state(false);
   let opening = $state(false);
   let wasDead = $state(false);
+  // Bulk output (ls/cat/dmesg) arrives as a burst of term-data events.
+  // Writing every chunk synchronously into xterm stalls the UI thread,
+  // so events pile into a FIFO drained in animation frames, ≤64 КБ/кадр.
+  let outQueue: Uint8Array[] = [];
+  let outBytes = 0;
+  let draining = false;
+  let catchingUp = $state(false);
+  const OUT_FRAME_BUDGET = 64 * 1024;
+  const OUT_CATCHUP_AT = 1024 * 1024;
   let fontSize = $state(14);
   let ro: ResizeObserver | null = null;
   let unlistenData: (() => void) | null = null;
@@ -39,6 +48,57 @@
     const dims = fit.proposeDimensions();
     if (!dims || dims.cols <= 0 || dims.rows <= 0) return null;
     return dims;
+  }
+
+  function drainOut() {
+    if (draining || !term) return;
+    draining = true;
+    const step = () => {
+      if (!term) {
+        draining = false;
+        return;
+      }
+      let budget = OUT_FRAME_BUDGET;
+      while (outQueue.length && budget > 0) {
+        const head = outQueue[0];
+        if (head.length <= budget) {
+          term.write(head);
+          outBytes -= head.length;
+          budget -= head.length;
+          outQueue.shift();
+        } else {
+          term.write(head.subarray(0, budget));
+          const rest = head.subarray(budget);
+          outBytes -= budget;
+          budget = 0;
+          outQueue[0] = rest;
+        }
+      }
+      if (outBytes < OUT_CATCHUP_AT) catchingUp = false;
+      if (outQueue.length) {
+        requestAnimationFrame(step);
+      } else {
+        draining = false;
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
+  function pushOut(bytes: Uint8Array) {
+    if (!bytes.length) return;
+    outQueue.push(bytes);
+    outBytes += bytes.length;
+    if (outBytes >= OUT_CATCHUP_AT) catchingUp = true;
+    drainOut();
+  }
+
+  // Drop stale backlog: after shell death / reconnect the old output
+  // must never spill into the fresh session.
+  function resetOut() {
+    outQueue = [];
+    outBytes = 0;
+    draining = false;
+    catchingUp = false;
   }
 
   function scheduleResize() {
@@ -106,12 +166,12 @@
 
     unlistenData = await listen<{ data: string }>("termix://term-data", (ev) => {
       try {
-        const bytes = decodeB64(ev.payload.data);
-        term?.write(bytes);
+        pushOut(decodeB64(ev.payload.data));
       } catch {
       }
     });
     unlistenExit = await listen("termix://term-exit", () => {
+      resetOut();
       term?.writeln("\r\n[session closed]");
       opened = false;
       wasDead = true;
@@ -132,6 +192,7 @@
       await api.termOpen(dims?.cols ?? 80, dims?.rows ?? 24);
       opened = true;
       if (wasDead) {
+        resetOut();
         term?.clear();
         wasDead = false;
       }
@@ -149,6 +210,7 @@
   }
 
   function clear() {
+    resetOut();
     term?.clear();
   }
 
@@ -185,6 +247,7 @@
   });
 
   onDestroy(() => {
+    resetOut();
     ro?.disconnect();
     unlistenData?.();
     unlistenExit?.();
@@ -195,6 +258,9 @@
 <div class="term-wrap" class:hidden={!active}>
   <div class="term-bar">
     <span class="hint">{tr($lang, "terminal.pasteHint")}</span>
+    {#if catchingUp}
+      <span class="catchup">{tr($lang, "terminal.catchingUp")}</span>
+    {/if}
     <div class="spacer"></div>
     {#if !opened}
       <button class="btn btn-sm btn-primary" onclick={openShell} disabled={opening}>
@@ -241,6 +307,15 @@
   .hint {
     font-size: 12px;
     color: var(--text-faint);
+  }
+  .catchup {
+    font-size: 11px;
+    color: var(--warn);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    background: rgba(251, 191, 36, 0.08);
+    border-radius: 999px;
+    padding: 2px 10px;
+    white-space: nowrap;
   }
   .spacer {
     flex: 1;
