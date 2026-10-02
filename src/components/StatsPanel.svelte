@@ -3,7 +3,7 @@
   import * as echarts from "echarts/core";
   import { PieChart } from "echarts/charts";
   import { CanvasRenderer } from "echarts/renderers";
-  import { Cpu, HardDrive, MemoryStick, RefreshCw } from "@lucide/svelte";
+  import { Cpu, HardDrive, MemoryStick, RotateCw } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { fmtSize, fmtUptime, pluralKey } from "../lib/format";
   import { tr } from "../lib/i18n";
@@ -198,19 +198,19 @@
 
 <div class="stats" class:hidden={!active}>
   <div class="stats-body">
-    <div class="refresh-row">
-      <Tip tip={tr($lang, "stats.refresh")} pos="bottom">
-        <button class="btn btn-sm" onclick={activate} disabled={loading}>
-          <RefreshCw size={14} />
-        </button>
-      </Tip>
-    </div>
-    {#if loading && !stats}
-      <div class="state">{tr($lang, "stats.loading")}</div>
-    {:else if !stats}
-      <div class="state">{tr($lang, "stats.noData")}</div>
-    {:else}
-      <div class="info-card">
+    <div class="info-card">
+      <div class="info-refresh">
+        <Tip tip={tr($lang, "stats.refresh")} pos="bottom">
+          <button class="icon-btn" onclick={activate} disabled={loading}>
+            <RotateCw size={18} />
+          </button>
+        </Tip>
+      </div>
+      {#if loading && !stats}
+        <div class="state">{tr($lang, "stats.loading")}</div>
+      {:else if !stats}
+        <div class="state">{tr($lang, "stats.noData")}</div>
+      {:else}
         {#if $conn.connected}
           <div class="info-row"><span class="info-key">{tr($lang, "stats.ip")}:</span><Tip tip={tr($lang, "stats.copyIp")}><button class="info-val ip-click" onclick={copyIp}>{$conn.host}</button></Tip></div>
         {/if}
@@ -230,7 +230,9 @@
         {#if stats.uptimeSecs != null}
           <div class="info-row"><span class="info-key">{tr($lang, "stats.uptime")}:</span><span class="info-val">{fmtUptime(stats.uptimeSecs, $lang)}</span></div>
         {/if}
-      </div>
+      {/if}
+    </div>
+    {#if stats}
       <div class="rings">
         <div class="ring-card" class:empty={cpuShown == null}>
           <div class="ring-box" bind:this={cpuEl}></div>
@@ -285,17 +287,13 @@
   .hidden {
     display: none;
   }
-  .refresh-row {
-    display: flex;
-    justify-content: flex-end;
-  }
   .stats-body {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 10px 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
   }
   .state {
     padding: 40px;
@@ -303,13 +301,19 @@
     color: var(--text-faint);
   }
   .info-card {
+    position: relative;
     background: var(--bg-panel);
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-lg);
-    padding: 12px 16px;
+    padding: 12px 56px 12px 16px;
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  .info-refresh {
+    position: absolute;
+    top: 8px;
+    right: 12px;
   }
   .info-row {
     display: grid;
