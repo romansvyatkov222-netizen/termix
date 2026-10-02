@@ -197,16 +197,14 @@
 </script>
 
 <div class="stats" class:hidden={!active}>
-  <div class="stats-bar">
-    <div class="spacer"></div>
-    <Tip tip={tr($lang, "stats.refresh")} pos="bottom">
-      <button class="btn btn-sm" onclick={activate} disabled={loading}>
-        <RefreshCw size={14} />
-      </button>
-    </Tip>
-  </div>
-
   <div class="stats-body">
+    <div class="refresh-row">
+      <Tip tip={tr($lang, "stats.refresh")} pos="bottom">
+        <button class="btn btn-sm" onclick={activate} disabled={loading}>
+          <RefreshCw size={14} />
+        </button>
+      </Tip>
+    </div>
     {#if loading && !stats}
       <div class="state">{tr($lang, "stats.loading")}</div>
     {:else if !stats}
@@ -287,17 +285,9 @@
   .hidden {
     display: none;
   }
-  .stats-bar {
+  .refresh-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border-soft);
-    background: var(--bg-panel);
-    min-width: 0;
-  }
-  .spacer {
-    flex: 1;
+    justify-content: flex-end;
   }
   .stats-body {
     flex: 1;
