@@ -183,7 +183,7 @@
     <div class="grid2">
       <div class="field">
         <label for="c-host">{tr($lang, "connect.host")}</label>
-        <input id="c-host" bind:value={host} placeholder="example.com" autocomplete="off" />
+        <input id="c-host" bind:value={host} placeholder={tr($lang, "connect.hostPlaceholder")} autocomplete="off" />
       </div>
       <div class="field">
         <label for="c-port">{tr($lang, "connect.port")}</label>

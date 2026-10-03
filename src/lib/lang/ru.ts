@@ -16,6 +16,7 @@ export const ru: Record<string, string> = {
   "connect.titleEdit": "Редактирование сессии",
   "connect.name": "Имя сессии",
   "connect.host": "Хост",
+  "connect.hostPlaceholder": "Введите IP или ссылку…",
   "connect.port": "Порт",
   "connect.username": "Имя пользователя",
   "connect.authType": "Аутентификация",

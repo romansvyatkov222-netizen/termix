@@ -16,6 +16,7 @@ export const en: Record<string, string> = {
   "connect.titleEdit": "Edit session",
   "connect.name": "Session name",
   "connect.host": "Host",
+  "connect.hostPlaceholder": "Enter IP or hostname…",
   "connect.port": "Port",
   "connect.username": "Username",
   "connect.authType": "Authentication",
