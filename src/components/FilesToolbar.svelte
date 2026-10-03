@@ -10,6 +10,7 @@
     pathInput = $bindable("~/"),
     search = $bindable(""),
     homeDir,
+    loading = false,
     onHome,
     onUp,
     onGo,
@@ -21,6 +22,7 @@
     pathInput?: string;
     search?: string;
     homeDir: string | null;
+    loading?: boolean;
     onHome: () => void;
     onUp: () => void;
     onGo: () => void;
@@ -195,7 +197,7 @@
   </div>
   <button class="btn btn-sm" onclick={onBrowseUpload}><Upload size={14} /> {tr(lang, "files.upload")}</button>
   <Tip tip={tr(lang, "files.refresh")} pos="bottom">
-    <button class="icon-btn" onclick={onRefresh}><RotateCw size={18} /></button>
+    <button class="icon-btn" class:spinning={loading} onclick={onRefresh} disabled={loading}><RotateCw size={18} /></button>
   </Tip>
 </div>
 

@@ -33,6 +33,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state::AppState::new())
         .invoke_handler(tauri::generate_handler![
             sessions::list_sessions,

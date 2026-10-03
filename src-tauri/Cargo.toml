@@ -1,6 +1,6 @@
 [package]
 name = "termix"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 
 [lib]
@@ -31,6 +31,7 @@ base64 = "0.22"
 sha2 = "0.10"
 # Optional: Discord Rich Presence logo (reads \\?\pipe\discord-ipc-*).
 discord-rich-presence = "1"
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 
 # Deliberate: dev builds skip debug symbols for faster Windows linking
 # (aws-lc-sys is heavy). Tradeoff: no line info in dev panics/backtraces.

@@ -121,6 +121,13 @@ impl AppState {
         // instance (crash / task manager). Live sessions are never in danger:
         // only files older than 24h are touched.
         let _ = crate::edit::sweep_stale_edit_temps(std::time::Duration::from_secs(24 * 3600));
+        // Same for updater leftovers: %TEMP%/Termix-<version>-updater-*/ keeps
+        // the downloaded installer after every update (process::exit skips
+        // TempPath cleanup). Only dirs older than 24h are touched.
+        let _ = crate::edit::sweep_stale_updater_temps(
+            "Termix",
+            std::time::Duration::from_secs(24 * 3600),
+        );
         let mut sessions: Vec<Session> = storage::read_encrypted_json("sessions.enc");
         let mut secrets: HashMap<String, SessionSecrets> =
             storage::read_encrypted_json("secrets.enc");

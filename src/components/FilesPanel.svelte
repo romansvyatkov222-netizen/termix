@@ -59,6 +59,7 @@
   );
 
   async function load(dir?: string) {
+    if (loading) return;
     loading = true;
     try {
       const target = dir ?? cwd;
@@ -618,6 +619,7 @@
     bind:pathInput
     bind:search
     homeDir={homeDir}
+    loading={loading}
     onHome={goHome}
     onUp={goUp}
     onGo={goToInput}

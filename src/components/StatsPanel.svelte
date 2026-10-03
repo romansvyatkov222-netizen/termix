@@ -201,7 +201,7 @@
     <div class="info-card">
       <div class="info-refresh">
         <Tip tip={tr($lang, "stats.refresh")} pos="bottom">
-          <button class="icon-btn" onclick={activate} disabled={loading}>
+          <button class="icon-btn" class:spinning={loading} onclick={activate} disabled={loading}>
             <RotateCw size={18} />
           </button>
         </Tip>

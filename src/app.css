@@ -187,6 +187,32 @@ select {
   color: var(--text);
 }
 
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+  background: transparent;
+  color: var(--text-sub);
+}
+
+.icon-btn.spinning svg {
+  animation: icon-spin 1s linear infinite;
+}
+
+@keyframes icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-btn.spinning svg {
+    animation: none;
+  }
+}
+
 .icon-lucide {
   line-height: 0;
 }

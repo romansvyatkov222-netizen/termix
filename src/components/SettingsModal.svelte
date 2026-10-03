@@ -4,6 +4,12 @@
   import { onMount } from "svelte";
   import { api } from "../lib/api";
   import { closeAllCleanEdits, hasDirtyEdit } from "../lib/editSessions";
+  import {
+    checkUpdaterManual,
+    updaterMsg,
+    updaterPhase,
+    updaterVersion,
+  } from "../lib/updater";
   import { lang, sessions, settings, toast, toastErr } from "../lib/stores";
   import { tr } from "../lib/i18n";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -21,6 +27,17 @@
   let storageDir = $state("");
   let version = $state("");
   let hasHosts = $state(false);
+  let updateChecking = $state(false);
+
+  async function manualUpdateCheck() {
+    if (updateChecking) return;
+    updateChecking = true;
+    try {
+      await checkUpdaterManual();
+    } finally {
+      updateChecking = false;
+    }
+  }
 
   onMount(async () => {
     try {
@@ -281,6 +298,20 @@
           <div class="about">
             <div class="about-name">Termix <span class="ver">{tr($lang, "settings.version")} {version}</span></div>
             <p>{tr($lang, "settings.aboutText")}</p>
+            <div class="field">
+              <div class="field-row">
+                <button class="btn btn-sm" onclick={manualUpdateCheck} disabled={updateChecking}>
+                  {updateChecking ? tr($lang, "update.checking") : tr($lang, "update.check")}
+                </button>
+              </div>
+              {#if $updaterPhase === "uptodate"}
+                <div class="sub">{tr($lang, "update.uptodate")}</div>
+              {:else if $updaterPhase === "available"}
+                <div class="sub">{tr($lang, "update.available", { v: $updaterVersion ?? "" })}</div>
+              {:else if $updaterPhase === "error" && $updaterMsg}
+                <div class="sub sub-err">{$updaterMsg}</div>
+              {/if}
+            </div>
             <button
               class="toggle-row"
               role="switch"
@@ -417,5 +448,9 @@
   .about .sub {
     color: var(--text-faint);
     font-size: 12px;
+  }
+  .sub-err {
+    color: var(--danger);
+    word-break: break-all;
   }
 </style>

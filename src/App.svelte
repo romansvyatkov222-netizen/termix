@@ -3,10 +3,12 @@
   import { api } from "./lib/api";
   import { conn, sessions, settings, tab, toastErr, view } from "./lib/stores";
   import { hostKeyAsk } from "./lib/connect";
+  import { checkUpdaterSilent } from "./lib/updater";
   import StartPage from "./components/StartPage.svelte";
   import Workspace from "./components/Workspace.svelte";
   import HostKeyDialog from "./components/HostKeyDialog.svelte";
   import Toasts from "./components/Toasts.svelte";
+  import UpdateAlert from "./components/UpdateAlert.svelte";
 
   onMount(async () => {
     try {
@@ -35,6 +37,7 @@
     } catch {
     }
     document.title = "Termix";
+    void checkUpdaterSilent();
   });
 </script>
 
@@ -54,6 +57,7 @@
 {/if}
 
 <Toasts />
+<UpdateAlert />
 
 <style>
   :global(#app) {
