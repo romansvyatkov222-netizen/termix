@@ -86,10 +86,11 @@ jobs:
 
       # Tauri names the NSIS bundle as
       # <productName>_<tauri.conf.json version>_<arch>-setup.exe.
-      # With createUpdaterArtifacts the bundler also emits the updater
-      # bundle (<name>.nsis.zip + .sig). The bundle dir may hold stale
-      # files from cache, so resolve by exact versioned name instead of
-      # a wildcard.
+      # With createUpdaterArtifacts the NSIS installer itself is re-used as
+      # the updater bundle: the bundler signs it in place (<name>.sig).
+      # There is NO separate .nsis.zip for the NSIS target (that naming is
+      # for other bundle types). The bundle dir may hold stale files from
+      # cache, so resolve by exact versioned name instead of a wildcard.
       - name: Collect installer
         shell: pwsh
         run: |
@@ -104,18 +105,14 @@ jobs:
           $f | Format-Table Name, Length
           "SETUP_PATH=$($f.FullName)" >> $env:GITHUB_ENV
           "SETUP_NAME=$($f.Name)" >> $env:GITHUB_ENV
-          # Updater bundle: same basename with .nsis.zip (ci may move this
-          # to latest.json generation step below — kept here for clarity).
-          $zip = "$p.nsis.zip"
-          $sig = "$zip.sig"
-          foreach ($u in @($zip, $sig)) {
-            if (-not (Test-Path -LiteralPath $u)) {
-              Get-ChildItem src-tauri/target/release/bundle/nsis/ | Format-Table Name, Length
-              throw "Expected updater artifact not found: $u"
-            }
-            Get-Item -LiteralPath $u | Format-Table Name, Length
+          # Updater bundle = the signed setup.exe itself.
+          $sig = "$p.sig"
+          if (-not (Test-Path -LiteralPath $sig)) {
+            Get-ChildItem src-tauri/target/release/bundle/nsis/ | Format-Table Name, Length
+            throw "Expected updater signature not found: $sig"
           }
-          "UPDATER_ZIP=$zip" >> $env:GITHUB_ENV
+          Get-Item -LiteralPath $sig | Format-Table Name, Length
+          "UPDATER_EXE=$p" >> $env:GITHUB_ENV
           "UPDATER_SIG=$sig" >> $env:GITHUB_ENV
 
       # Static update manifest consumed by the in-app updater
@@ -126,7 +123,7 @@ jobs:
         run: |
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           $sig = (Get-Content $env:UPDATER_SIG -Raw).Trim()
-          $zipName = Split-Path $env:UPDATER_ZIP -Leaf
+          $exeName = Split-Path $env:UPDATER_EXE -Leaf
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
           } else {
@@ -139,7 +136,7 @@ jobs:
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
                 signature = $sig
-                url = "https://github.com/romansvyatkov222-netizen/termix/releases/download/$tag/$zipName"
+                url = "https://github.com/romansvyatkov222-netizen/termix/releases/download/$tag/$exeName"
               }
             }
           }
@@ -154,7 +151,6 @@ jobs:
           name: termix-installer
           path: |
             ${{ env.SETUP_PATH }}
-            ${{ env.UPDATER_ZIP }}
             ${{ env.UPDATER_SIG }}
             ${{ env.LATEST_JSON }}
           if-no-files-found: error
@@ -165,7 +161,6 @@ jobs:
         with:
           files: |
             ${{ env.SETUP_PATH }}
-            ${{ env.UPDATER_ZIP }}
             ${{ env.UPDATER_SIG }}
             ${{ env.LATEST_JSON }}
           generate_release_notes: true
@@ -177,7 +172,6 @@ jobs:
           tag_name: manual-${{ github.run_number }}
           files: |
             ${{ env.SETUP_PATH }}
-            ${{ env.UPDATER_ZIP }}
             ${{ env.UPDATER_SIG }}
             ${{ env.LATEST_JSON }}
           generate_release_notes: true
