@@ -18,9 +18,9 @@ jobs:
   build-installer:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -74,7 +74,15 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --bundles nsis
+        # TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) must be set, otherwise the
+        # bundler fails when createUpdaterArtifacts/pubkey is configured.
+        # Fail fast with a clear message instead of a cryptic build error.
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY is empty — add the updater private key to repo Settings → Secrets (Actions) and re-run."
+          }
+          npx tauri build --bundles nsis
+        shell: pwsh
 
       # Tauri names the NSIS bundle as
       # <productName>_<tauri.conf.json version>_<arch>-setup.exe.
