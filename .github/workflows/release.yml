@@ -44,7 +44,7 @@ jobs:
 
       - name: Frontend checks
         run: |
-          npm ci --allow-scripts=esbuild
+          npm ci
           npx tsc --noEmit
           npm run check
           npm run build
