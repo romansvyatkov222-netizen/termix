@@ -22,3 +22,7 @@ Thumbs.db
 
 # Agent working notes (per-repo, not part of the project)
 AGENTS.md
+
+# Tauri updater signing keys (private key must never be committed)
+*.key
+*.pass
