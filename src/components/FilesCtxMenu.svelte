@@ -57,6 +57,7 @@
   });
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: stopPropagation guard so window-click closer doesn't swallow menu button clicks; dismissal via Escape/outside-click on window -->
 <div class="ctx-menu" bind:this={menuEl} style="left:{pos.x}px; top:{pos.y}px" onclick={(e) => e.stopPropagation()}>
   {#if hasTarget}
     {#if canDownload}

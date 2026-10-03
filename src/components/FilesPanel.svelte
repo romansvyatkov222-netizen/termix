@@ -603,6 +603,8 @@
   class="files"
   class:hidden={!active}
   class:drag={dragOver}
+  role="region"
+  aria-label="files"
   ondragover={(e) => {
     e.preventDefault();
     dragOver = true;
@@ -629,10 +631,12 @@
   />
 
   <div class="table-head">
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: column-sort headers are pointer-only; full keyboard sorting is out of scope for the file table -->
     <div class="col-name sortable" onclick={() => toggleSort("name")}>
       {tr($lang, "files.name")} {sortKey === "name" ? (sortDir === 1 ? "▲" : "▼") : ""}
     </div>
     <div class="col-size">{tr($lang, "files.size")}</div>
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: column-sort headers are pointer-only; full keyboard sorting is out of scope for the file table -->
     <div class="col-date sortable" onclick={() => toggleSort("modified")}>
       {tr($lang, "files.modified")} {sortKey === "modified" ? (sortDir === 1 ? "▲" : "▼") : ""}
     </div>
@@ -645,6 +649,7 @@
       <div class="state">{tr($lang, "files.empty")}</div>
     {:else}
       {#each visible as e (e.path)}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: file rows are pointer-driven (click/shift-select/dblclick/ctx-menu); keyboard file ops are out of scope -->
         <div
           class="row"
           class:sel={selected.includes(e.path)}

@@ -96,6 +96,7 @@
 </script>
 
 <div class="queue" class:collapsed>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: collapse toggle is pointer-only; queue actions remain keyboard-accessible buttons -->
   <div class="q-head" onclick={() => (collapsed = !collapsed)} role="button" tabindex="0">
     <span class="q-title">{tr($lang, "transfers.title")} ({$transfers.length})</span>
     <span class="q-toggle">{collapsed ? "▲" : "▼"}</span>

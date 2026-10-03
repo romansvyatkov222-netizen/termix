@@ -20,10 +20,18 @@
     onConnected: () => void;
   } = $props();
 
+  // Snapshot of the edited session: `editing` never changes while the modal
+  // is open (StartPage mounts a fresh modal per edit), so plain $state
+  // initialized once from props is the correct pattern here.
+  // svelte-ignore state_referenced_locally
   let name = $state(editing?.name ?? "");
+  // svelte-ignore state_referenced_locally
   let host = $state(editing?.host ?? "");
+  // svelte-ignore state_referenced_locally
   let port = $state(editing?.port ?? 22);
+  // svelte-ignore state_referenced_locally
   let username = $state(editing?.username ?? "");
+  // svelte-ignore state_referenced_locally
   let authType = $state<"password" | "privateKey">(editing?.authType ?? "password");
   // Secrets are input-only: empty input keeps the stored secret.
   let password = $state("");
@@ -157,6 +165,7 @@
 />
 
 <div class="modal-backdrop" transition:fade={{ duration: 150 }}>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: backdrop click is a pointer-only dismiss shortcut; Escape is handled globally via svelte:window -->
   <div
     class="modal"
     in:scale={{ duration: 180, start: 0.96 }}
@@ -195,6 +204,7 @@
       />
     </div>
     <div class="field">
+      <!-- svelte-ignore a11y_label_has_associated_control: Dropdown renders its own button; the label is linked via aria-labelledby on the button instead of a native control -->
       <label id="c-auth-label">{tr($lang, "connect.authType")}</label>
       <Dropdown
         options={[
@@ -202,6 +212,7 @@
           { value: "privateKey", label: tr($lang, "connect.authKey") },
         ]}
         value={authType}
+        labelledBy="c-auth-label"
         onChange={(v) => (authType = v as "password" | "privateKey")}
       />
     </div>

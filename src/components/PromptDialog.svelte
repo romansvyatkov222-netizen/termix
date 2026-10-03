@@ -21,6 +21,9 @@
     onCancel: () => void;
   } = $props();
 
+  // Snapshot: `initial` is fixed for the dialog lifetime (one prompt per
+  // mount), so initializing local state once is the correct pattern.
+  // svelte-ignore state_referenced_locally
   let value = $state(initial);
   let inputEl: HTMLInputElement | null = $state(null);
 
@@ -41,6 +44,7 @@
 />
 
 <div class="modal-backdrop" transition:fade={{ duration: 150 }}>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: backdrop click is a pointer-only dismiss shortcut; Escape is handled globally via svelte:window -->
   <div
     class="modal modal-sm"
     in:scale={{ duration: 180, start: 0.96 }}

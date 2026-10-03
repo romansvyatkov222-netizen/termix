@@ -12,11 +12,13 @@
     value,
     onChange,
     id,
+    labelledBy,
   }: {
     options: DropOption[];
     value: string;
     onChange: (v: string) => void;
     id?: string;
+    labelledBy?: string;
   } = $props();
 
   let open = $state(false);
@@ -45,7 +47,7 @@
 />
 
 <div class="dd" bind:this={root}>
-  <button type="button" {id} class="dd-btn" class:open onclick={toggle}>
+  <button type="button" {id} class="dd-btn" class:open onclick={toggle} aria-labelledby={labelledBy}>
     <span class="dd-label">{current?.label ?? ""}</span>
     <ChevronDown size={16} />
   </button>

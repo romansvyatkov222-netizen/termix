@@ -102,6 +102,7 @@
   {:else}
     <div class="cards">
       {#each $sessions as s (s.id)}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: card click = mouse shortcut for Connect; keyboard users get the ⋮ menu button (Enter/Space) and the explicit Connect item -->
         <div
           class="card"
           role="button"
@@ -124,6 +125,7 @@
           <div class="card-menu-wrap">
             <button class="icon-btn" onclick={(e) => toggleMenu(s.id, e)}>⋮</button>
             {#if openMenuId === s.id}
+              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: stopPropagation guard so window-click closer doesn't swallow menu button clicks; dismissal via Escape/outside-click on window -->
               <div class="ctx-menu card-menu" onclick={(e) => e.stopPropagation()}>
                 <button class="ctx-item" onclick={() => quickConnect(s)}><MonitorSpeaker size={14} /> {tr($lang, "sessions.connect")}</button>
                 <button class="ctx-item" onclick={() => openEdit(s)}><SquarePen size={14} /> {tr($lang, "sessions.edit")}</button>

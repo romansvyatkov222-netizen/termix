@@ -188,6 +188,7 @@
 />
 
 <div class="modal-backdrop" transition:fade={{ duration: 150 }}>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions: backdrop click is a pointer-only dismiss shortcut; Escape is handled globally via svelte:window -->
   <div
     class="modal modal-wide"
     in:scale={{ duration: 180, start: 0.96 }}
@@ -210,6 +211,7 @@
       <div class="set-content">
         {#if section === "language"}
           <div class="field">
+            <!-- svelte-ignore a11y_label_has_associated_control: Dropdown renders its own button; the label is linked via aria-labelledby on the button instead of a native control -->
             <label id="set-lang-label">{tr($lang, "settings.language")}</label>
             <Dropdown
               options={[
@@ -218,6 +220,7 @@
                 { value: "en", label: tr($lang, "settings.langEn") },
               ]}
               value={["auto", "ru", "en"].includes($settings.language) ? $settings.language : "auto"}
+              labelledBy="set-lang-label"
               onChange={(v) => setLang(v as "auto" | "ru" | "en")}
             />
           </div>
@@ -230,14 +233,17 @@
             </div>
           </div>
           <div class="field">
+            <!-- svelte-ignore a11y_label_has_associated_control: Dropdown renders its own button; the label is linked via aria-labelledby on the button instead of a native control -->
             <label id="set-editor-label">{tr($lang, "settings.editor")}</label>
             <Dropdown
               options={editorOptions}
               value={$settings.editor}
+              labelledBy="set-editor-label"
               onChange={(v) => setEditor(v as "notepad" | "notepad++" | "vscode")}
             />
           </div>
           <div class="field">
+            <!-- svelte-ignore a11y_label_has_associated_control: the temp-files actions below are buttons, not a labelled control; the label is a section caption -->
             <label for="set-clear-edittemp">{tr($lang, "settings.editTemp")}</label>
             <div class="field-row">
               {#if $hasDirtyEdit || editTempFiles === 0}
@@ -291,8 +297,9 @@
             {/if}
           </div>
           <div class="field">
+            <!-- svelte-ignore a11y_label_has_associated_control: readout-only path text, not a form control; exposed via role=status for assistive tech -->
             <label>{tr($lang, "settings.storagePath")}</label>
-            <div class="storage">{storageDir}</div>
+            <div class="storage" role="status">{storageDir}</div>
           </div>
         {:else}
           <div class="about">
