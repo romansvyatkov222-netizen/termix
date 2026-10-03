@@ -581,27 +581,37 @@ pub(crate) async fn edit_temp_clear() -> Result<crate::models::EditTempClearResu
 /// Runs once at startup: only `%TEMP%/Termix-edit` entries older than
 /// `max_age` (finished files and orphaned `.part` downloads alike).
 pub(crate) fn sweep_stale_edit_temps(max_age: std::time::Duration) -> usize {
-    sweep_stale_temp_entries("Termix-edit", max_age, false)
+    sweep_stale_temp_entries(max_age)
 }
 
-/// Remove stale updater leftovers: the Tauri updater downloads the new
-/// installer into `%TEMP%/<app>-<version>-updater-*/` and launches it via
-/// `std::process::exit(0)`, so destructors never run and the folder stays
-/// behind after every update. Runs once at startup, only entries older than
-/// `max_age` (never touch a fresh folder — a second app copy may use it).
-pub(crate) fn sweep_stale_updater_temps(app_name: &str, max_age: std::time::Duration) -> usize {
-    sweep_stale_temp_entries(&format!("{app_name}-"), max_age, true)
-}
-
-/// Shared age-based TEMP cleanup: files in one fixed dir for edit temps,
-/// whole directories in %TEMP% for updater leftovers. Best-effort, never
-/// fails startup.
-fn sweep_stale_temp_entries(prefix: &str, max_age: std::time::Duration, dirs: bool) -> usize {
-    let base = if dirs {
-        std::env::temp_dir()
-    } else {
-        std::env::temp_dir().join("Termix-edit")
+/// Remove updater leftovers: the Tauri updater downloads the new installer
+/// into a temp dir and launches it via `std::process::exit(0)`, so
+/// destructors never run and the folder stays behind after every update.
+/// Runs once at startup. No age check: these dirs are only created during
+/// download-and-install, which always exits the app right after — so any
+/// such dir seen at startup is leftover by definition.
+pub(crate) fn sweep_stale_updater_temps(app_name: &str) -> usize {
+    let prefix = format!("{app_name}-");
+    let entries = match std::fs::read_dir(std::env::temp_dir()) {
+        Ok(e) => e,
+        Err(_) => return 0,
     };
+    let mut removed = 0;
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !(name.starts_with(&prefix) && name.contains("-updater-")) {
+            continue;
+        }
+        if std::fs::remove_dir_all(e.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Age-based TEMP cleanup for edit temp files. Best-effort, never fails startup.
+fn sweep_stale_temp_entries(max_age: std::time::Duration) -> usize {
+    let base = std::env::temp_dir().join("Termix-edit");
     let entries = match std::fs::read_dir(&base) {
         Ok(e) => e,
         Err(_) => return 0,
@@ -609,13 +619,6 @@ fn sweep_stale_temp_entries(prefix: &str, max_age: std::time::Duration, dirs: bo
     let now = std::time::SystemTime::now();
     let mut removed = 0;
     for e in entries.flatten() {
-        let name = e.file_name();
-        let name = name.to_string_lossy();
-        // Updater dirs look like `<app>-<version>-updater-<rand>`; skip
-        // everything else so foreign TEMP entries are never touched.
-        if dirs && !(name.starts_with(prefix) && name.contains("-updater-")) {
-            continue;
-        }
         let old = e
             .metadata()
             .and_then(|m| m.modified())
@@ -623,15 +626,8 @@ fn sweep_stale_temp_entries(prefix: &str, max_age: std::time::Duration, dirs: bo
             .and_then(|t| now.duration_since(t).ok())
             .map(|d| d >= max_age)
             .unwrap_or(false);
-        if old {
-            let ok = if dirs {
-                std::fs::remove_dir_all(e.path()).is_ok()
-            } else {
-                std::fs::remove_file(e.path()).is_ok()
-            };
-            if ok {
-                removed += 1;
-            }
+        if old && std::fs::remove_file(e.path()).is_ok() {
+            removed += 1;
         }
     }
     removed

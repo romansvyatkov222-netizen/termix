@@ -5,7 +5,6 @@
     downloadAndInstallUpdate,
     dismissUpdate,
     updaterMsg,
-    updaterNotes,
     updaterPhase,
     updaterProgress,
     updaterVersion,
@@ -38,9 +37,6 @@
         </button>
       {/if}
     </div>
-    {#if $updaterNotes}
-      <div class="ua-notes">{$updaterNotes}</div>
-    {/if}
     {#if $updaterPhase === "available"}
       <button class="btn btn-sm btn-primary ua-btn" onclick={onUpdate} disabled={busy}>
         <Download size={14} /> {t("update.install")}
@@ -65,16 +61,16 @@
     right: 16px;
     bottom: 16px;
     z-index: 300;
-    width: 320px;
+    width: 280px;
     max-width: calc(100vw - 32px);
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
-    padding: 14px 16px;
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
   .ua-head {
     display: flex;
@@ -121,15 +117,6 @@
   .ua-x:hover {
     color: var(--text);
     background: var(--bg-hover);
-  }
-  .ua-notes {
-    font-size: 12px;
-    color: var(--text-sub);
-    line-height: 1.5;
-    max-height: 96px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
   .ua-btn {
     align-self: flex-start;
