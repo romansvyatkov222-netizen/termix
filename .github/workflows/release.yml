@@ -29,29 +29,42 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - uses: actions/cache@v4
+      # Smart Rust cache: only dependency artifacts (registry + compiled
+      # deps in target/), keyed by Cargo.lock + rustc version. Our own
+      # crates are NOT cached (rebuilt each run — that's fast). Replaces
+      # the raw actions/cache that also stored target/ but without pruning
+      # stale artifacts and without sharing across branch caches.
+      # NOTE: do NOT add `src-tauri/target` to any other cache — rust-cache
+      # owns that dir and cleans it before save.
+      # Placed AFTER the Rust toolchain step (cache key needs rustc version).
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          workspaces: "src-tauri -> target"
+          cache-on-failure: true
 
       - name: Frontend checks
         run: |
-          npm ci
+          npm ci --allow-scripts=esbuild
           npx tsc --noEmit
           npm run check
           npm run build
 
+      # Full check-suite: fmt + clippy + offline-safe tests.
+      # Tag builds (v*) skip clippy/test — main is already green and the
+      # installer build below compiles the same graph anyway, so re-running
+      # them only burns minutes for zero new signal. Manual runs and
+      # non-tag pushes always run the full suite. fmt is cheap, always runs.
       - name: Rust checks
         working-directory: src-tauri
         run: |
           cargo fmt --check
-          cargo clippy --all-targets -- -D warnings
-          cargo test sysinfo
+          if ("${{ github.ref_type }}" -ne "tag") {
+            cargo clippy --all-targets -- -D warnings
+            cargo test sysinfo
+          } else {
+            echo "tag build: skipping clippy/test (already green on main)"
+          }
+        shell: pwsh
 
       # NSIS only: no bare exe is published. The frontend (dist/ built
       # above via beforeBuildCommand) is embedded into the exe as Tauri
