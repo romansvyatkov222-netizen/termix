@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import { api } from "./api";
 import { t } from "./stores";
 
 export type UpdaterPhase =
@@ -95,6 +96,14 @@ export async function downloadAndInstallUpdate(): Promise<void> {
   updaterPhase.set("downloading");
   updaterProgress.set(0);
   updaterMsg.set(null);
+  // No installer can be running at this point, so stale updater TEMP dirs
+  // from previous updates are safe to remove now. Best-effort: never blocks
+  // the update itself.
+  try {
+    await api.cleanupUpdaterTemps();
+  } catch {
+    // ignore: startup sweep + retry thread cover the same ground
+  }
   let downloaded = 0;
   let total: number | null = null;
   try {

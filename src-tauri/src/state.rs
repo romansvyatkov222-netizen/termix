@@ -126,6 +126,9 @@ impl AppState {
         // TempPath cleanup). Any such dir at startup is leftover — no age
         // check, since download-and-install always exits the app right after.
         let _ = crate::edit::sweep_stale_updater_temps("Termix");
+        // Retry in the background: the installer may still hold file locks
+        // right after an update, so the first sweep can silently fail.
+        crate::edit::spawn_updater_temp_retry("Termix");
         let mut sessions: Vec<Session> = storage::read_encrypted_json("sessions.enc");
         let mut secrets: HashMap<String, SessionSecrets> =
             storage::read_encrypted_json("secrets.enc");

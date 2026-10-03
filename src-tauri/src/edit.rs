@@ -584,6 +584,10 @@ pub(crate) fn sweep_stale_edit_temps(max_age: std::time::Duration) -> usize {
     sweep_stale_temp_entries(max_age)
 }
 
+pub(crate) fn is_updater_temp_dir(name: &str, prefix: &str) -> bool {
+    name.starts_with(prefix) && name.contains("-updater-")
+}
+
 /// Remove updater leftovers: the Tauri updater downloads the new installer
 /// into a temp dir and launches it via `std::process::exit(0)`, so
 /// destructors never run and the folder stays behind after every update.
@@ -599,7 +603,7 @@ pub(crate) fn sweep_stale_updater_temps(app_name: &str) -> usize {
     let mut removed = 0;
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
-        if !(name.starts_with(&prefix) && name.contains("-updater-")) {
+        if !is_updater_temp_dir(&name, &prefix) {
             continue;
         }
         if std::fs::remove_dir_all(e.path()).is_ok() {
@@ -607,6 +611,33 @@ pub(crate) fn sweep_stale_updater_temps(app_name: &str) -> usize {
         }
     }
     removed
+}
+
+/// Retry cleanup of updater TEMP leftovers in the background: right after
+/// an update the NSIS installer may still hold file locks, so the startup
+/// sweep can silently fail. Retries a few times with growing delays, then
+/// stops. Detached thread, never blocks startup or the async runtime.
+pub(crate) fn spawn_updater_temp_retry(app_name: &'static str) {
+    std::thread::Builder::new()
+        .name("updater-temp-sweep".to_string())
+        .spawn(move || {
+            // 60s -> 5min -> 15min: covers installer teardown + slow AV scans.
+            for delay in [60, 4 * 60, 10 * 60] {
+                std::thread::sleep(std::time::Duration::from_secs(delay));
+                if sweep_stale_updater_temps(app_name) > 0 {
+                    break;
+                }
+            }
+        })
+        .ok();
+}
+
+/// Manual cleanup of updater TEMP leftovers, callable from the frontend
+/// right before downloading a new update (no installer can be running at
+/// that point, so removal is safe). Returns the number of removed dirs.
+#[tauri::command]
+pub(crate) async fn cleanup_updater_temps() -> Result<usize, String> {
+    Ok(sweep_stale_updater_temps("Termix"))
 }
 
 /// Age-based TEMP cleanup for edit temp files. Best-effort, never fails startup.
@@ -631,4 +662,27 @@ fn sweep_stale_temp_entries(max_age: std::time::Duration) -> usize {
         }
     }
     removed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn updater_temp_dir_matcher() {
+        // Real shape: `Termix-<version>-updater-<rand>`.
+        assert!(is_updater_temp_dir(
+            "Termix-0.1.6-updater-pN7ubK",
+            "Termix-"
+        ));
+        assert!(is_updater_temp_dir(
+            "Termix-0.1.7-updater-abc123",
+            "Termix-"
+        ));
+        // Foreign TEMP entries are never matched.
+        assert!(!is_updater_temp_dir("Termix-edit", "Termix-"));
+        assert!(!is_updater_temp_dir("Termix-sessions.tmp", "Termix-"));
+        assert!(!is_updater_temp_dir("OtherApp-1.0-updater-xyz", "Termix-"));
+        assert!(!is_updater_temp_dir("Termix-updater", "Termix-"));
+    }
 }

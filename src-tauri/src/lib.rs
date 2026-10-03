@@ -81,6 +81,7 @@ pub fn run() {
             edit::edit_temp_status,
             edit::edit_temp_open,
             edit::edit_temp_clear,
+            edit::cleanup_updater_temps,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

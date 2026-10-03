@@ -83,6 +83,8 @@ export const api = {
   editTempStatus: () => invoke<{ files: number }>("edit_temp_status"),
   editTempOpen: () => invoke<string>("edit_temp_open"),
   editTempClear: () => invoke<{ removed: number }>("edit_temp_clear"),
+  // Best-effort removal of stale updater TEMP dirs (returns count removed).
+  cleanupUpdaterTemps: () => invoke<number>("cleanup_updater_temps"),
 
   systemStats: () => invoke<SystemStats>("system_stats"),
 
